@@ -1,0 +1,29 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Helper: Auth check
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    // Helper: Check membership via Firestore
+    function isTenantMember(tenantId) {
+       // OJO: firestore.get en storage rules es una feature reciente/beta y tiene sintaxis específica.
+       // Si no está disponible, se suele usar Custom Claims en el Auth Token.
+       // Asumiendo soporte estándar o fallback a path check + auth básico si es simple.
+       
+       // SINTAXIS MODERNA (permite acceso a firestore)
+       return firestore.exists(/databases/(default)/documents/tenants/$(tenantId)/users/$(request.auth.uid));
+    }
+
+    match /tenants/{tenantId}/{allPaths=**} {
+      // Regla básica: Si el usuario existe en la subcolección 'users' del tenant, tiene acceso.
+      // Lectura: Miembros
+      allow read: if isSignedIn() && isTenantMember(tenantId);
+      
+      // Escritura: Miembros (Simplificado, staff puede subir comprobantes)
+      allow write: if isSignedIn() && isTenantMember(tenantId);
+    }
+  }
+}

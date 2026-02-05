@@ -1,0 +1,98 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- FUNCIONES HELPER ---
+
+    // Verifica si el usuario está autenticado
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Obtiene los datos del usuario dentro del tenant
+    function getMemberData(tenantId) {
+      return get(/databases/$(database)/documents/tenants/$(tenantId)/users/$(request.auth.uid)).data;
+    }
+
+    // Verifica si el usuario existe y está activo
+    function isMemberActive(tenantId) {
+      let member = getMemberData(tenantId);
+      return member != null && member.active == true;
+    }
+
+    // Verifica roles específicos
+    function hasRole(tenantId, allowedRoles) {
+      let member = getMemberData(tenantId);
+      return member != null && member.active == true && (member.role in allowedRoles);
+    }
+    
+    // Función específica para STAFF:
+    // Permite update si NO se modifican campos sensibles (totales, precios)
+    function isStaffSafeUpdate() {
+      let incoming = request.resource.data;
+      let existing = resource.data;
+      
+      // Lista blanca de campos que Staff PUEDE tocar (o negación de los que NO puede)
+      // Simplificación: Validamos que los totales financieros no cambien
+      
+      return incoming.total == existing.total 
+          && incoming.subtotal == existing.subtotal
+          && incoming.impuestos == existing.impuestos
+          && incoming.descuentoGlobal == existing.descuentoGlobal
+          // Tampoco pueden cambiar los items (que afectan logica financiera)
+          && incoming.items == existing.items;
+      
+      // Staff solo debería tocar: estado, checklist, pagos, observaciones, clienteSnapshot (si cambia direccion)
+    }
+
+    // --- REGLAS ---
+
+    match /tenants/{tenantId} {
+      
+      // Colección de Usuarios del Tenant (Solo lectura para miembros, escritura solo admin/owner)
+      match /users/{userId} {
+        allow read: if isSignedIn() && isMemberActive(tenantId);
+        allow write: if isSignedIn() && hasRole(tenantId, ['owner', 'admin']);
+      }
+
+      // Presupuestos
+      match /presupuestos/{presupuestoId} {
+        // Leer: Todo miembro activo
+        allow read: if isSignedIn() && isMemberActive(tenantId);
+        
+        // Crear: Admin/Owner
+        allow create: if isSignedIn() && hasRole(tenantId, ['owner', 'admin']);
+        
+        // Update: Lógica compleja
+        allow update: if isSignedIn() && (
+          // Admin/Owner: Todo permitido
+          hasRole(tenantId, ['owner', 'admin']) 
+          || 
+          // Staff: Permitido con restricciones de integridad financiera
+          (hasRole(tenantId, ['staff']) && isStaffSafeUpdate())
+        );
+        
+        // Delete: Solo Owner/Admin
+        allow delete: if isSignedIn() && hasRole(tenantId, ['owner', 'admin']);
+      }
+      
+      // Clientes y Materiales (CRUD completo para admin/owner/staff por simplicidad, o restringir staff)
+      match /clientes/{clienteId} {
+        allow read: if isSignedIn() && isMemberActive(tenantId);
+        allow write: if isSignedIn() && isMemberActive(tenantId); // Staff puede crear clientes
+      }
+      
+      match /materiales/{mid} {
+        allow read: if isSignedIn() && isMemberActive(tenantId);
+        allow write: if isSignedIn() && hasRole(tenantId, ['owner', 'admin']); // Staff no toca inventario base
+      }
+
+      // Movimientos de Stock (Log only)
+      match /movimientos/{movId} {
+        allow read: if isSignedIn() && isMemberActive(tenantId);
+        allow create: if isSignedIn() && isMemberActive(tenantId); // Staff genera movimientos al aprobar?
+        allow update, delete: if false; // Logs inmutables
+      }
+    }
+  }
+}
