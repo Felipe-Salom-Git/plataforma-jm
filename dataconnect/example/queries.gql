@@ -1,0 +1,70 @@
+mutation CreateElectricianProfile(
+  $userId: UUID!
+  $bio: String
+  $hourlyRate: Float!
+  $licenseNumber: String!
+  $serviceAreaDescription: String!
+  $specialties: [String]
+  $yearsOfExperience: Int
+) @auth(level: USER) {
+  electricianProfile_insert(
+    data: {
+      userId: $userId
+      bio: $bio
+      hourlyRate: $hourlyRate
+      licenseNumber: $licenseNumber
+      serviceAreaDescription: $serviceAreaDescription
+      specialties: $specialties
+      yearsOfExperience: $yearsOfExperience
+    }
+  )
+}
+
+query GetElectricianProfileByUser($userId: UUID!) @auth(
+  level: USER,
+  insecureReason: "This query returns profile information for any logged in user."
+) {
+  electricianProfiles(where: { userId: { eq: $userId } }) {
+    id
+    bio
+    hourlyRate
+    licenseNumber
+    serviceAreaDescription
+    specialties
+    yearsOfExperience
+  }
+}
+
+mutation CreateJobRequest(
+  $clientId: UUID!
+  $electricianId: UUID
+  $budget: Float
+  $description: String!
+  $locationDetails: String
+  $requestedDate: Date!
+  $status: String!
+) @auth(level: USER) {
+  jobRequest_insert(
+    data: {
+      clientId: $clientId
+      electricianId: $electricianId
+      budget: $budget
+      description: $description
+      locationDetails: $locationDetails
+      requestedDate: $requestedDate
+      status: $status
+    }
+  )
+}
+
+query ListJobRequestsForClient($clientId: UUID!) @auth(level: USER) {
+  jobRequests(where: { clientId: { eq: $clientId } }) {
+    id
+    electricianId
+    budget
+    description
+    locationDetails
+    requestedDate
+    status
+  }
+}

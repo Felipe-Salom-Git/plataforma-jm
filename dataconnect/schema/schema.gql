@@ -1,0 +1,48 @@
+type User @table {
+  email: String!
+  passwordHash: String!
+  role: String!
+  createdAt: Timestamp!
+  firstName: String
+  lastName: String
+  phone: String
+  address: String
+  profilePictureUrl: String
+}
+
+type ElectricianProfile @table {
+  user: User!
+  licenseNumber: String!
+  serviceAreaDescription: String!
+  hourlyRate: Float!
+  specialties: [String]
+  yearsOfExperience: Int
+  bio: String
+}
+
+type Service @table {
+  electricianProfile: ElectricianProfile!
+  name: String!
+  description: String!
+  estimatedDuration: Int
+}
+
+type JobRequest @table {
+  client: User!
+  electrician: User
+  status: String!
+  description: String!
+  requestedDate: Date!
+  createdAt: Timestamp!
+  budget: Float
+  locationDetails: String
+}
+
+type Review @table {
+  jobRequest: JobRequest!
+  client: User!
+  electrician: User!
+  rating: Int!
+  createdAt: Timestamp!
+  comment: String
+}

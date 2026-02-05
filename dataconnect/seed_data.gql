@@ -1,0 +1,61 @@
+mutation CreateSeedData @transaction @auth(level: PUBLIC, insecureReason: "This operation is safe to expose to the public") {
+  user_insertMany(data: [
+    {
+      id: "550e8400-e29b-41d4-a716-446655440000",
+      firstName: "John",
+      lastName: "Doe",
+      email: "john.doe@example.com",
+      passwordHash: "hashed_password",
+      role: "client",
+      createdAt: "2024-01-01T00:00:00Z"
+    },
+    {
+      id: "550e8400-e29b-41d4-a716-446655440001",
+      firstName: "Jane",
+      lastName: "Smith",
+      email: "jane.smith@example.com",
+      passwordHash: "hashed_password",
+      role: "electrician",
+      createdAt: "2024-01-01T00:00:00Z"
+    }
+  ])
+  electricianProfile_insertMany(data: [
+    {
+      id: "650e8400-e29b-41d4-a716-446655440002",
+      userId: "550e8400-e29b-41d4-a716-446655440001",
+      bio: "Experienced electrician",
+      hourlyRate: 50.0,
+      licenseNumber: "12345",
+      serviceAreaDescription: "Anywhere",
+      yearsOfExperience: 10
+    }
+  ])
+  jobRequest_insertMany(data: [
+    {
+      id: "750e8400-e29b-41d4-a716-446655440003",
+      clientId: "550e8400-e29b-41d4-a716-446655440000",
+      description: "Fix electrical issue",
+      status: "open",
+      createdAt: "2024-02-01T00:00:00Z",
+      requestedDate: "2024-02-05",
+    }
+  ])
+  review_insertMany(data: [
+    {
+      id: "850e8400-e29b-41d4-a716-446655440004",
+      clientId: "550e8400-e29b-41d4-a716-446655440000",
+      electricianId: "550e8400-e29b-41d4-a716-446655440001",
+      jobRequestId: "750e8400-e29b-41d4-a716-446655440003",
+      rating: 5,
+      createdAt: "2024-02-06T00:00:00Z"
+    }
+  ])
+  service_insertMany(data: [
+    {
+      id: "950e8400-e29b-41d4-a716-446655440005",
+      electricianProfileId: "650e8400-e29b-41d4-a716-446655440002",
+      name: "Electrical Repair",
+      description: "General electrical repair services"
+    }
+  ])
+}
