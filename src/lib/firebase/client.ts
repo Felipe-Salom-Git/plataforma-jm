@@ -1,5 +1,4 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
-import { getAnalytics, isSupported } from "firebase/analytics";
 
 const firebaseConfig = {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -10,12 +9,19 @@ const firebaseConfig = {
     appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
+// Validate Env - Log clear error if missing
+const requiredKeys = [
+    'apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'
+] as const;
+
+if (typeof window !== 'undefined') {
+    const missing = requiredKeys.filter(key => !firebaseConfig[key]);
+    if (missing.length > 0) {
+        console.error(`Missing Firebase Environment Variables: ${missing.join(', ')}. Check your .env.local file.`);
+    }
+}
+
 // Singleton pattern for Firebase App
 export const app: FirebaseApp = !getApps().length
     ? initializeApp(firebaseConfig)
     : getApp();
-
-// Analytics (optional, client-side only)
-if (typeof window !== "undefined") {
-    isSupported().then((yes) => yes && getAnalytics(app));
-}

@@ -4,28 +4,32 @@ import {
     doc,
     DocumentData,
     CollectionReference,
-    DocumentReference
+    DocumentReference,
 } from "firebase/firestore";
 import { app } from "./client";
 
 export const db = getFirestore(app);
 
-// --- Multi-tenant Helpers ---
+// Tenant fijo constante
+export const TENANT_ID = "julian-marti";
 
-// Helper to get a collection reference scoped to a tenant (user)
+/**
+ * Helper para obtener CollectionReference bajo el tenant fijo.
+ * Path: tenants/julian-marti/{collectionName}
+ */
 export const getTenantCollection = (
-    tenantId: string,
     collectionName: string
 ): CollectionReference<DocumentData> => {
-    // Strategy: Subcollections per User -> /users/{tenantId}/{collectionName}
-    return collection(db, "users", tenantId, collectionName);
+    return collection(db, "tenants", TENANT_ID, collectionName);
 };
 
-// Helper to get a config/settings doc reference
+/**
+ * Helper para obtener DocumentReference bajo el tenant fijo.
+ * Path: tenants/julian-marti/{collectionName}/{docId}
+ */
 export const getTenantDoc = (
-    tenantId: string,
     collectionName: string,
     docId: string
 ): DocumentReference<DocumentData> => {
-    return doc(db, "users", tenantId, collectionName, docId);
+    return doc(db, "tenants", TENANT_ID, collectionName, docId);
 };

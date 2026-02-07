@@ -48,9 +48,12 @@ export interface ItemPresupuesto {
   cantidad: number;
   unidad: UnidadMedida;
   precioUnitario: number; // Precio de venta (puede diferir del costo)
+  precioUnitarioTexto?: string; // Alternativa texto
   materialReferenceId?: string; // Si viene de inventario
   descuento?: number; // Porcentaje o monto fijo
   total: number; // Calculado
+  totalTexto?: string; // Alternativa texto
+  cantidadTexto?: string; // Alternativa texto
 }
 
 export interface ClienteSnapshot {
@@ -101,6 +104,16 @@ export interface Presupuesto extends EntidadBase {
 
   // Archivos
   pdfUrl?: string; // URL firmada o publica del PDF
+
+  // New Config Fields
+  materials?: {
+    name: string;
+    quantity: number;
+    unitPrice: number;
+    subtotal?: number;
+  }[];
+  notQuotedItems?: string[];
+  paymentMethod?: string;
 }
 
 // --- Calendario ---

@@ -3,65 +3,158 @@ import {
     updateDoc,
     getDocs,
     query,
-    where,
     orderBy,
     limit,
     serverTimestamp,
     doc,
-    getDoc
+    getDoc,
+    where
 } from "firebase/firestore";
-import { getTenantCollection, getTenantDoc } from "../firebase/firestore";
-import type { Presupuesto } from "../types";
+import { getTenantCollection, getTenantDoc, TENANT_ID } from "../firebase/firestore";
+import { QuoteFormValues } from "../validation/schemas";
+// Re-export type if needed or strictly use schemas
+// But we might need 'id' which is not in FormValues. 
 
 export const QuotesService = {
 
-    create: async (tenantId: string, data: Omit<Presupuesto, "id" | "createdAt" | "updatedAt" | "ownerId">) => {
-        const colRef = getTenantCollection(tenantId, "presupuestos");
+    createQuote: async (values: QuoteFormValues) => {
+        const colRef = getTenantCollection("quotes");
 
-        // Auto-generate doc ref to get ID first if needed, or let addDoc do it.
-        // We add timestamp and ownerId automatically.
-        const newDoc = await addDoc(colRef, {
-            ...data,
-            ownerId: tenantId,
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-        });
+        // CALCULATE TOTALS
+        // Items total
+        const itemsTotal = values.items.reduce((acc, item) => acc + (item.total || 0), 0);
 
-        return newDoc.id;
-    },
+        // Materials total (default to empty array if missing)
+        const materialsTotal = (values.materials || []).reduce((acc, mat) => acc + (mat.total || 0), 0);
 
-    update: async (tenantId: string, id: string, data: Partial<Presupuesto>) => {
-        const docRef = getTenantDoc(tenantId, "presupuestos", id);
-        await updateDoc(docRef, {
-            ...data,
-            updatedAt: Date.now()
-        });
-    },
+        const subtotal = itemsTotal + materialsTotal;
+        const total = subtotal - (values.descuentoGlobal || 0);
 
-    getById: async (tenantId: string, id: string): Promise<Presupuesto | null> => {
-        const docRef = getTenantDoc(tenantId, "presupuestos", id);
-        const snap = await getDoc(docRef);
-        if (!snap.exists()) return null;
-        return { id: snap.id, ...snap.data() } as Presupuesto;
-    },
-
-    listByStatus: async (tenantId: string, status?: string) => {
-        const colRef = getTenantCollection(tenantId, "presupuestos");
-        let q = query(colRef, orderBy("createdAt", "desc"), limit(50));
-
-        if (status) {
-            q = query(colRef, where("estado", "==", status), orderBy("createdAt", "desc"), limit(50));
+        // Calculate validity days
+        let validezDias = 15;
+        if (values.date && values.validUntil) {
+            validezDias = Math.ceil((new Date(values.validUntil).getTime() - new Date(values.date).getTime()) / (1000 * 60 * 60 * 24));
         }
 
-        const snapshot = await getDocs(q);
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Presupuesto));
+        // CONSTRUCT DOCUMENT
+        const docData = {
+            ...values,
+            // Explicitly saving snapshot fields if schema allows spreading them from values.
+            // If values has them (clarifications, etc), they are saved.
+
+            // Map 'status' to 'estado'
+            estado: values.status,
+
+            // Snapshot for list display
+            clienteSnapshot: {
+                nombre: values.client.name,
+                direccion: values.client.lines.join(", "),
+                email: values.client.email || "",
+                telefono: values.client.phone || "",
+            },
+
+            subtotal,
+            descuentoGlobal: values.descuentoGlobal || 0,
+            total: total > 0 ? total : 0,
+            saldoPendiente: total > 0 ? total : 0,
+            validezDias,
+            numero: `P-${Date.now().toString().slice(-6)}`, // Temporary numbering
+
+            ownerId: TENANT_ID,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        };
+
+        const docRef = await addDoc(colRef, docData);
+
+        return { id: docRef.id };
     },
 
-    // Specialized query for dashboard
-    listRecent: async (tenantId: string) => {
-        const colRef = getTenantCollection(tenantId, "presupuestos");
-        const q = query(colRef, orderBy("updatedAt", "desc"), limit(5));
-        const snapshot = await getDocs(q);
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Presupuesto));
+    updateQuote: async (id: string, values: Partial<QuoteFormValues>) => {
+        const docRef = getTenantDoc("quotes", id);
+
+        const updates: any = {
+            ...values,
+            updatedAt: serverTimestamp()
+        };
+
+        // Recalculate validezDias if dates are present
+        if (values.date && values.validUntil) {
+            updates.validezDias = Math.ceil((new Date(values.validUntil).getTime() - new Date(values.date).getTime()) / (1000 * 60 * 60 * 24));
+        }
+
+        await updateDoc(docRef, updates);
+    },
+
+    // Listing methods retained/updated 
+    listByStatus: async (status?: string) => {
+        const colRef = getTenantCollection("quotes");
+        let q = query(colRef, orderBy("createdAt", "desc"), limit(50));
+        if (status) {
+            q = query(colRef, where("status", "==", status), orderBy("createdAt", "desc"), limit(50));
+        }
+        const snap = await getDocs(q);
+        return snap.docs.map(d => {
+            const data = d.data();
+            return {
+                id: d.id,
+                ...data,
+                // Normalized fields for list view
+                createdAt: data.createdAt?.toMillis ? data.createdAt.toMillis() : (typeof data.createdAt === 'number' ? data.createdAt : Date.now()),
+                updatedAt: data.updatedAt?.toMillis ? data.updatedAt.toMillis() : (typeof data.updatedAt === 'number' ? data.updatedAt : Date.now()),
+                clienteSnapshot: {
+                    nombre: data.clienteSnapshot?.nombre || data.client?.name || "Cliente",
+                    // Other fields might not be needed for list but good for consistency
+                    direccion: data.clienteSnapshot?.direccion || "",
+                    email: data.clienteSnapshot?.email || "",
+                    telefono: data.clienteSnapshot?.telefono || ""
+                },
+                estado: data.estado || data.status || 'draft',
+                total: data.total || 0,
+                titulo: data.titulo || data.title || "Sin Título"
+            }
+        });
+    },
+
+    // Helper to get raw data for edit form
+    getById: async (id: string) => {
+        const docRef = getTenantDoc("quotes", id);
+        const snap = await getDoc(docRef);
+        if (!snap.exists()) return null;
+
+        const data = snap.data();
+
+        // Return as Presupuesto type (timestamps as numbers)
+        // Assume data spread includes other matching fields
+        return {
+            id: snap.id,
+            ...data,
+            // Consistency: Check if Timestamp or number/string
+            createdAt: data.createdAt?.toMillis ? data.createdAt.toMillis() : (typeof data.createdAt === 'number' ? data.createdAt : Date.now()),
+            updatedAt: data.updatedAt?.toMillis ? data.updatedAt.toMillis() : (typeof data.updatedAt === 'number' ? data.updatedAt : Date.now()),
+
+            // Normalize Arrays to avoid undefined map errors
+            items: data.items || [],
+            materials: data.materials || [],
+            notQuotedItems: data.notQuotedItems || [],
+
+            // Normalize Client Snapshot
+            clienteSnapshot: {
+                nombre: data.clienteSnapshot?.nombre || data.client?.name || "Cliente Desconocido",
+                direccion: data.clienteSnapshot?.direccion || (data.client?.lines ? data.client.lines.join(", ") : "") || "",
+                email: data.clienteSnapshot?.email || data.client?.email || "",
+                telefono: data.clienteSnapshot?.telefono || data.client?.phone || ""
+            },
+
+            // Normalize status
+            estado: data.estado || data.status || 'draft',
+
+            // Normalize other fields
+            validezDias: data.validezDias || 15,
+            subtotal: data.subtotal || 0,
+            total: data.total || 0,
+            descuentoGlobal: data.descuentoGlobal || 0
+        } as any; // Cast to any effectively or import Presupuesto to cast properly. 
+        // Ideally: return result as Presupuesto
     }
 };

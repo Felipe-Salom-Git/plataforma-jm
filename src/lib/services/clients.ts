@@ -11,7 +11,7 @@ import type { Cliente } from "../types";
 
 export const ClientsService = {
     create: async (tenantId: string, data: Omit<Cliente, "id" | "createdAt" | "updatedAt" | "ownerId">) => {
-        const colRef = getTenantCollection(tenantId, "clientes");
+        const colRef = getTenantCollection("clientes");
         await addDoc(colRef, {
             ...data,
             ownerId: tenantId,
@@ -21,7 +21,7 @@ export const ClientsService = {
     },
 
     update: async (tenantId: string, id: string, data: Partial<Cliente>) => {
-        const docRef = getTenantDoc(tenantId, "clientes", id);
+        const docRef = getTenantDoc("clientes", id);
         await updateDoc(docRef, {
             ...data,
             updatedAt: Date.now()
@@ -29,7 +29,8 @@ export const ClientsService = {
     },
 
     list: async (tenantId: string) => {
-        const colRef = getTenantCollection(tenantId, "clientes");
+        const colRef = getTenantCollection("clientes");
+
         const q = query(colRef, orderBy("nombre"), limit(100)); // Limit for safety
         const snapshot = await getDocs(q);
         return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Cliente));
