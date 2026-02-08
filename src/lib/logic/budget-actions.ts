@@ -42,26 +42,30 @@ const generateTrackingTasks = (items: any[]): TrackingTask[] => {
             text += ` (${details.join(" ")})`;
         }
 
-        return {
+        const task: TrackingTask = {
             id: `task_${Date.now()}_${index}`,
             text: text,
-            completed: false,
-            originalItemId: item.id
+            completed: false
         };
+        if (item.id) task.originalItemId = item.id;
+        return task;
     });
 };
 
 const generateTrackingMaterials = (materials: any[]): TrackingMaterial[] => {
     if (!Array.isArray(materials)) return [];
 
-    return materials.map((mat, index) => ({
-        id: `mat_${Date.now()}_${index}`,
-        name: mat.name || mat.nombre || "Material sin nombre",
-        quantity: mat.quantity ?? mat.cantidad ?? 0,
-        unit: mat.unit || mat.unidad || "u",
-        status: 'planned',
-        originalMaterialId: mat.id
-    }));
+    return materials.map((mat, index) => {
+        const m: TrackingMaterial = {
+            id: `mat_${Date.now()}_${index}`,
+            name: mat.name || mat.nombre || "Material sin nombre",
+            quantity: mat.quantity ?? mat.cantidad ?? 0,
+            unit: mat.unit || mat.unidad || "u",
+            status: 'planned'
+        };
+        if (mat.id) m.originalMaterialId = mat.id;
+        return m;
+    });
 };
 
 
@@ -129,12 +133,13 @@ export const approveBudget = async (
                 email: clientSnap.email,
                 telefono: clientSnap.telefono,
                 direccion: clientSnap.direccion,
-                cuit: clientSnap.cuit,
                 updatedAt: now,
-                lastQuoteId: presupuesto.id,
-                lastQuoteNumber: presupuesto.numero,
-                ownerId: tenantId
+                ownerId: tenantId,
+                lastQuoteId: presupuestoId // derived from arg, always defined
             };
+            // Conditionally add optional fields
+            if (clientSnap.cuit) clientData.cuit = clientSnap.cuit;
+            if (presupuesto.numero) clientData.lastQuoteNumber = presupuesto.numero;
 
             // Sanitize clientData
             if (!cDoc.exists()) {
@@ -161,14 +166,15 @@ export const approveBudget = async (
                 createdAt: now,
                 updatedAt: now,
 
-                quoteId: presupuesto.id,
+                quoteId: presupuestoId, // Mandatory, from arg
                 quoteNumber: presupuesto.numero || "??",
                 title: presupuesto.titulo || (presupuesto as any).title || "Trabajo",
 
                 clientId: clientId,
                 clientSnapshot: clientSnap,
 
-                quoteSnapshot: presupuesto, // SNAPSHOT COMPLETE
+                // We inject the ID into the snapshot to be sure
+                quoteSnapshot: { ...presupuesto, id: presupuestoId },
 
                 tasks: tasks,
                 materials: materials,
@@ -178,8 +184,8 @@ export const approveBudget = async (
                 saldoPendiente: presupuesto.total || 0,
                 total: presupuesto.total || 0,
 
-                status: 'pending_start', // or 'in_progress'
-                presupuestoRef: presupuesto.id
+                status: 'pending_start',
+                presupuestoRef: presupuestoId
             };
 
             // Sanitize tracking data
