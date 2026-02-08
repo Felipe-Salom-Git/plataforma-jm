@@ -38,7 +38,7 @@ export default function QuoteForm({ initialData, quoteId }: QuoteFormProps) {
 
     // Map initialData to FormValues
     const defaultValues: Partial<QuoteFormValues> = initialData ? {
-        title: initialData.titulo,
+        title: initialData.titulo ?? (initialData as any).title ?? "",
         date: initialData.date ? initialData.date : (initialData.createdAt ? formatDate(new Date(initialData.createdAt)) : formatDate(new Date())),
         validUntil: initialData.validUntil ? initialData.validUntil : (initialData.validezDias ? formatDate(new Date(Date.now() + initialData.validezDias * 86400000)) : undefined),
         status: initialData.estado || 'draft',
@@ -256,11 +256,11 @@ export default function QuoteForm({ initialData, quoteId }: QuoteFormProps) {
                                         onValueChange={(val: any) => form.setValue('status', val)}
                                         defaultValue={form.getValues('status')}
                                     >
-                                        <SelectTrigger className="bg-white text-slate-900 border-slate-200"><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="draft">Borrador</SelectItem>
-                                            <SelectItem value="pending">Pendiente</SelectItem>
-                                            <SelectItem value="approved">Aprobado</SelectItem>
+                                        <SelectTrigger className="bg-white text-black border border-gray-300 data-[placeholder]:text-gray-500"><SelectValue /></SelectTrigger>
+                                        <SelectContent className="bg-white border-gray-300 text-black">
+                                            <SelectItem value="draft" className="focus:bg-gray-100 focus:text-black cursor-pointer">Borrador</SelectItem>
+                                            <SelectItem value="pending" className="focus:bg-gray-100 focus:text-black cursor-pointer">Pendiente</SelectItem>
+                                            <SelectItem value="approved" className="focus:bg-gray-100 focus:text-black cursor-pointer">Aprobado</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>

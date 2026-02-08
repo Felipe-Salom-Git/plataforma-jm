@@ -28,50 +28,10 @@ import { PdfPreviewModal } from '@/components/quotes/PdfPreviewModal';
 import { approveBudget } from '@/lib/logic/budget-actions';
 import { ProviderProfileService } from '@/lib/services/providerProfile';
 
-// Helper for mapping (duplicated from Detail page, ideally shared)
-// simplified for list purposes
-const mapListToPdfData = (budget: Presupuesto, providerProfile: any) => {
-    return {
-        companyName: providerProfile?.fullName || "Mi Empresa",
-        companyAddress: providerProfile?.address || "",
-        companyPhone: providerProfile?.phone || "",
-        companyEmail: providerProfile?.email || "",
-
-        clientName: budget.clienteSnapshot?.nombre || "Cliente",
-        clientAddress: budget.clienteSnapshot?.direccion || "",
-        clientPhone: budget.clienteSnapshot?.telefono || "",
-        clientEmail: budget.clienteSnapshot?.email || "",
-
-        budgetNumber: budget.numero || "S/N",
-        issueDate: budget.createdAt ? new Date(budget.createdAt).toLocaleDateString() : '-',
-        validUntil: budget.createdAt ? new Date(budget.createdAt + ((budget.validezDias || 15) * 24 * 60 * 60 * 1000)).toLocaleDateString() : '-',
-        workTitle: budget.titulo,
-
-        items: (budget.items || []).map(i => ({
-            id: i.id,
-            description: i.descripcion,
-            unit: i.unidad,
-            quantity: i.cantidad,
-            unitPrice: i.precioUnitario,
-            total: i.total
-        })),
-
-        subtotal: budget.subtotal || 0,
-        discount: budget.descuentoGlobal || 0,
-        total: budget.total || 0,
-
-        excludedItems: budget.notQuotedItems || [],
-        clarifications: (budget as any).clarificationsText || (budget as any).clarifications || budget.observaciones || "Sin observaciones.",
-        paymentConditions: (budget as any).paymentConditionsText || budget.condicionesPago || "A convenir.",
-        paymentMethod: (budget as any).paymentMethodText || budget.paymentMethod || "Efectivo",
-
-        logoBase64: undefined,
-        signatureBase64: undefined
-    };
-};
+import { mapToPdfData, convertSvgToPng } from '@/lib/pdf/mapper';
 
 export default function QuotesPage() {
-    const { tenantId, isAuthenticated } = useTenant();
+    const { tenantId, isAuthenticated, user } = useTenant();
     const [quotes, setQuotes] = useState<Presupuesto[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -122,16 +82,31 @@ export default function QuotesPage() {
     const handlePreviewPdf = async (budget: Presupuesto) => {
         setGeneratingPdf(budget.id);
         try {
-            // Fetch provider profile on demand for PDF
+            // 1. Fetch Full Quote Data
+            const fullBudget = await QuotesService.getById(budget.id);
+            
+            // 2. Fetch Provider Profile
             const profile = await ProviderProfileService.getProfile();
-            const pdfData = mapListToPdfData(budget, profile);
+
+            // 3. Handle Signature
+            let pngSig = undefined;
+            if (profile?.signature?.svg) {
+                try {
+                    pngSig = await convertSvgToPng(profile.signature.svg);
+                } catch (e) {
+                    console.warn("Signature conversion failed", e);
+                }
+            }
+
+            // 4. Map Data
+            const pdfData = mapToPdfData(fullBudget || budget, { name: user?.displayName }, profile, pngSig);
 
             setPreviewData(pdfData);
             setPreviewFileName(`Presupuesto-${budget.numero || 'X'}-${budget.clienteSnapshot.nombre}`);
             setPreviewOpen(true);
         } catch (error) {
             console.error("PDF Prep Error", error);
-            alert("Error preparando PDF");
+            alert("Error general al preparar PDF. Intente nuevamente.");
         } finally {
             setGeneratingPdf(null);
         }
@@ -187,11 +162,10 @@ export default function QuotesPage() {
                                         </TableCell>
                                         <TableCell>${(q.total || 0).toLocaleString()}</TableCell>
                                         <TableCell>
-                                            <Badge variant={
-                                                q.estado === 'approved' ? 'default' :
-                                                    q.estado === 'draft' ? 'secondary' : 'outline'
-                                            } className={
-                                                q.estado === 'approved' ? 'bg-green-600 hover:bg-green-700' : ''
+                                            <Badge variant="outline" className={
+                                                q.estado === 'approved' ? 'bg-green-100 text-green-800 border-green-200 hover:bg-green-100' :
+                                                q.estado === 'pending' ? 'bg-yellow-100 text-yellow-900 border-yellow-200 hover:bg-yellow-100' :
+                                                'bg-slate-100 text-slate-800 border-slate-200 hover:bg-slate-100'
                                             }>
                                                 {q.estado === 'draft' ? 'Borrador' :
                                                     q.estado === 'approved' ? 'Aprobado' :
@@ -201,30 +175,38 @@ export default function QuotesPage() {
                                         <TableCell className="text-right">
                                             <div className="flex justify-end items-center gap-2">
                                                 {/* Quick PDF Action */}
-                                                <Button variant="ghost" size="icon" onClick={() => handlePreviewPdf(q)} disabled={!!generatingPdf}>
-                                                    {generatingPdf === q.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4 text-slate-500" />}
+                                                <Button 
+                                                    variant="ghost" 
+                                                    size="icon" 
+                                                    onClick={() => handlePreviewPdf(q)} 
+                                                    disabled={!!generatingPdf}
+                                                    className="bg-white text-black border border-gray-300 hover:bg-gray-50 h-8 w-8"
+                                                >
+                                                    {generatingPdf === q.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4 text-slate-700" />}
                                                 </Button>
 
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
-                                                        <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
+                                                        <Button variant="ghost" size="icon" className="bg-white text-black border border-gray-300 hover:bg-gray-50 h-8 w-8">
+                                                            <MoreHorizontal className="h-4 w-4 text-slate-700" />
+                                                        </Button>
                                                     </DropdownMenuTrigger>
-                                                    <DropdownMenuContent align="end">
+                                                    <DropdownMenuContent align="end" className="bg-white text-black border border-gray-200">
                                                         <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                                                        <DropdownMenuItem onClick={() => window.location.href = `/quotes/${q.id}`}>
+                                                        <DropdownMenuItem onClick={() => window.location.href = `/quotes/${q.id}`} className="focus:bg-gray-100 focus:text-black cursor-pointer">
                                                             <Eye className="mr-2 h-4 w-4" /> Ver Detalle
                                                         </DropdownMenuItem>
-                                                        <DropdownMenuItem onClick={() => window.location.href = `/quotes/${q.id}/edit`}>
+                                                        <DropdownMenuItem onClick={() => window.location.href = `/quotes/${q.id}/edit`} className="focus:bg-gray-100 focus:text-black cursor-pointer">
                                                             <Pencil className="mr-2 h-4 w-4" /> Editar
                                                         </DropdownMenuItem>
-                                                        <DropdownMenuItem onClick={() => handlePreviewPdf(q)}>
+                                                        <DropdownMenuItem onClick={() => handlePreviewPdf(q)} className="focus:bg-gray-100 focus:text-black cursor-pointer">
                                                             <FileText className="mr-2 h-4 w-4" /> Previsualizar PDF
                                                         </DropdownMenuItem>
 
                                                         {(q.estado === 'draft' || q.estado === 'pending') && (
                                                             <>
-                                                                <DropdownMenuSeparator />
-                                                                <DropdownMenuItem onClick={() => handleApprove(q)} className="text-green-600 focus:text-green-700">
+                                                                <DropdownMenuSeparator className="bg-gray-200" />
+                                                                <DropdownMenuItem onClick={() => handleApprove(q)} className="text-green-600 focus:text-green-700 focus:bg-green-50 cursor-pointer">
                                                                     <CheckCircle className="mr-2 h-4 w-4" /> Aprobar
                                                                 </DropdownMenuItem>
                                                             </>

@@ -6,8 +6,10 @@ import { ClientsService } from '@/lib/services/clients';
 import { Cliente } from '@/lib/types'; // Interfaces must be defined in types/index.ts
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Loader2, Plus, Search, Phone, Mail, MapPin } from 'lucide-react';
+import { Loader2, Plus, Search, Phone, Mail, MapPin, Activity } from 'lucide-react';
+import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -121,6 +123,16 @@ export default function ClientsPage() {
                         {client.email && <div className="flex items-center gap-2"><Mail className="h-3 w-3"/> {client.email}</div>}
                         {client.direccion && <div className="flex items-center gap-2"><MapPin className="h-3 w-3"/> {client.direccion}</div>}
                     </div>
+                    {client.activeTrackingId && (
+                        <div className="mt-4 pt-4 border-t">
+                            <Link href={`/trackings/${client.activeTrackingId}`} className="block">
+                                <Badge variant="secondary" className="w-full justify-center py-1 hover:bg-slate-200 cursor-pointer">
+                                    <Activity className="h-3 w-3 mr-2 text-blue-600" />
+                                    Seguimiento Activo
+                                </Badge>
+                            </Link>
+                        </div>
+                    )}
                 </div>
             ))}
             {clients.length === 0 && <p className="text-gray-500 col-span-full text-center py-10">No hay clientes registrados.</p>}

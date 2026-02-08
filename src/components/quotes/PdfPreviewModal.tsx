@@ -49,18 +49,18 @@ export function PdfPreviewModal({ open, onClose, data, fileName }: PdfPreviewMod
 
     return (
         <Dialog open={open} onOpenChange={(val) => !val && onClose()}>
-            <DialogContent className="max-w-4xl h-[90vh] flex flex-col p-0">
-                <DialogHeader className="px-6 py-4 border-b">
-                    <DialogTitle className="flex items-center justify-between">
-                        <span>Vista Previa PDF</span>
-                        <div className="flex gap-2">
-                            <Button size="sm" onClick={handleDownload} disabled={!pdfUrl || loading}>
-                                <FileDown className="mr-2 h-4 w-4" />
-                                Descargar
-                            </Button>
-
-                        </div>
-                    </DialogTitle>
+            <DialogContent className="max-w-4xl h-[90vh] flex flex-col p-0 [&>button]:hidden">
+                <DialogHeader className="px-6 py-4 border-b flex-row items-center justify-between space-y-0">
+                    <DialogTitle>Vista Previa PDF</DialogTitle>
+                    <div className="flex items-center gap-3">
+                        <Button variant="outline" size="sm" onClick={handleDownload} disabled={!pdfUrl || loading}>
+                            <FileDown className="mr-2 h-4 w-4" />
+                            Descargar
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-9 w-9" onClick={onClose} aria-label="Cerrar">
+                            <X className="h-5 w-5" />
+                        </Button>
+                    </div>
                 </DialogHeader>
 
                 <div className="flex-1 bg-slate-100 p-4 overflow-hidden relative">

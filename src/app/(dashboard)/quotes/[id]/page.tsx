@@ -21,140 +21,19 @@ import {
     MapPin,
     CreditCard,
     Pencil as PencilIcon,
-    FileText
+    FileText,
+    Activity
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { QuotePdfData } from '@/lib/pdf/generateQuotePdf';
 import { PaymentModal } from '@/components/quotes/PaymentModal';
+import { mapToPdfData, convertSvgToPng, formatDate, safeNum, toDate } from '@/lib/pdf/mapper';
 
 // --- Helpers ---
-const toDate = (value: any): Date | null => {
-    if (!value) return null;
-    if (value instanceof Date) return value;
-    if (typeof value === 'number') return new Date(value);
-    if (typeof value.toDate === 'function') return value.toDate(); // Firestore Timestamp
-    if (typeof value === 'object' && 'seconds' in value) return new Date(value.seconds * 1000);
-    if (typeof value === 'string') {
-        // Handle YYYY-MM-DD to prevent timezone issues if possible, or just standard new Date
-        return new Date(value);
-    }
-    return null;
-};
-
-const formatDate = (value: any): string => {
-    const d = toDate(value);
-    if (!d || isNaN(d.getTime())) return '-';
-    return d.toLocaleDateString();
-};
-
-// Utility to clean numbers
-const safeNum = (val: any): number => {
-    const n = Number(val);
-    return Number.isFinite(n) ? n : 0;
-};
+// (Removed local helpers - imported from mapper)
 
 // Helper to map DB Budget to PDF Data
-const mapToPdfData = (budget: Presupuesto & any, companyInfo: any, providerProfile: any | null, signaturePng?: string): QuotePdfData => {
-    // Provider Profile Logic
-    // User requested: providerName = profile.fullName ?? profile.nombre ?? user.displayName ?? "Prestador"
-    const compName = providerProfile?.fullName || providerProfile?.nombre || companyInfo.name || "Prestador";
-    const compAddr = providerProfile?.address || providerProfile?.direccion || "";
-    const compPhone = providerProfile?.phone || providerProfile?.telefono || "";
-    const compEmail = providerProfile?.email || "";
-
-    // Client fallbacks
-    const clientName = budget.client?.name || budget.clienteSnapshot?.nombre || "Cliente";
-
-    let clientAddress = "";
-    if (Array.isArray(budget.client?.lines)) {
-        clientAddress = budget.client.lines.join(", ");
-    } else if (typeof budget.client?.address === 'string') {
-        clientAddress = budget.client.address;
-    } else {
-        clientAddress = budget.clienteSnapshot?.direccion || "";
-    }
-
-    const clientPhone = budget.client?.phone || budget.clienteSnapshot?.telefono || "";
-    const clientEmail = budget.client?.email || budget.clienteSnapshot?.email || "";
-
-    // Dates
-    const issueDate = budget.date ? formatDate(budget.date) : formatDate(budget.createdAt);
-
-    let validUntilStr = "-";
-    if (budget.validUntil) {
-        validUntilStr = formatDate(budget.validUntil);
-    } else if (budget.createdAt) {
-        const d = toDate(budget.createdAt);
-        if (d) {
-            const days = safeNum(budget.validezDias) || 15;
-            d.setDate(d.getDate() + days);
-            validUntilStr = d.toLocaleDateString();
-        }
-    }
-
-    return {
-        companyName: compName,
-        companyAddress: compAddr,
-        companyPhone: compPhone,
-        companyEmail: compEmail,
-
-        clientName,
-        clientAddress,
-        clientPhone,
-        clientEmail,
-
-        budgetNumber: String(budget.numero ?? budget.number ?? "S/N"),
-        issueDate,
-        validUntil: validUntilStr,
-        workTitle: budget.title || budget.titulo || "Presupuesto",
-
-        items: [
-            ...(budget.items || []).map((i: any, idx: number) => {
-                const qty = safeNum(i.cantidad ?? i.quantity);
-                const price = safeNum(i.precioUnitario ?? i.unitPrice);
-                const total = safeNum(i.total) || (qty * price); // Fallback calculation
-
-                return {
-                    id: String(i.id ?? `item-${idx}`),
-                    description: i.descripcion || i.task || i.description || "—",
-                    unit: i.unidad || i.unit || "",
-                    quantity: qty,
-                    unitPrice: price,
-                    total: total
-                };
-            }),
-            ...(budget.materials || []).map((m: any, idx: number) => {
-                const qty = safeNum(m.cantidad ?? m.quantity);
-                const price = safeNum(m.precioUnitario ?? m.unitPrice);
-                const total = safeNum(m.subtotal ?? m.total) || (qty * price);
-
-                return {
-                    id: String(m.id ?? `mat-${idx}`),
-                    description: `Material: ${m.name || m.nombre || "Sin nombre"}`,
-                    unit: m.unidad || m.unit || "",
-                    quantity: qty,
-                    unitPrice: price,
-                    total: total
-                };
-            })
-        ],
-
-        subtotal: safeNum(budget.subtotal),
-        discount: safeNum(budget.descuentoGlobal),
-        total: safeNum(budget.total),
-
-        excludedItems: budget.notQuotedItems || budget.excludedItems || [],
-
-        clarifications: budget.clarificationsText || budget.clarifications || "",
-        conditions: budget.conditionsText || budget.conditions || "",
-        notes: budget.notesText || budget.notes || "",
-
-        paymentConditions: budget.paymentConditionsText || budget.paymentConditions || "",
-        paymentMethod: budget.paymentMethodText || budget.paymentMethod || "",
-
-        logoBase64: undefined,
-        signatureBase64: signaturePng
-    };
-};
+// (Removed local mapToPdfData - imported from mapper)
 
 export default function BudgetDetailPage() {
     const { id } = useParams();
@@ -223,11 +102,11 @@ export default function BudgetDetailPage() {
         setApproving(true);
         try {
             await approveBudget(tenantId, budget.id);
-            loadData(); // Reload
-            alert("Presupuesto aprobado correctamente.");
+            await loadData(); // Reload
+            toast.success("Aprobado y enviado a seguimiento ✅");
         } catch (error) {
             console.error("Error approving", error);
-            alert("Error al aprobar.");
+            toast.error("Error al aprobar.");
         } finally {
             setApproving(false);
         }
@@ -246,24 +125,38 @@ export default function BudgetDetailPage() {
                         <ArrowLeft className="h-5 w-5" />
                     </Button>
                     <div>
-                        <h1 className="text-2xl font-bold flex items-center gap-2">
-                            {budget.titulo}
-                            <Badge variant={budget.estado === 'approved' ? 'default' : 'secondary'} className="uppercase">
-                                {budget.estado}
+                        <div className="flex items-center gap-3">
+                            <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+                                {budget.titulo ?? (budget as any).title ?? (budget as any).workTitle ?? "Presupuesto"}
+                            </h1>
+                            <Badge variant="outline" className={
+                                budget.estado === 'approved' ? 'bg-green-100 text-green-800 border-green-200 uppercase' :
+                                budget.estado === 'pending' ? 'bg-yellow-100 text-yellow-900 border-yellow-200 uppercase' :
+                                'bg-slate-100 text-slate-800 border-slate-200 uppercase'
+                            }>
+                                {budget.estado === 'draft' ? 'Borrador' :
+                                 budget.estado === 'approved' ? 'Aprobado' :
+                                 budget.estado === 'pending' ? 'Pendiente' : budget.estado}
                             </Badge>
-                        </h1>
-                        <p className="text-sm text-muted-foreground">#{budget.numero || 'BORRADOR'} • Creado el {formatDate((budget as any).date || budget.createdAt)}</p>
+                        </div>
+                        <p className="text-sm text-muted-foreground mt-1">#{budget.numero || 'BORRADOR'} • {formatDate((budget as any).date || budget.createdAt)}</p>
                     </div>
                 </div>
 
                 <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => router.push(`/quotes/${budget.id}/edit`)}>
+                    <Button variant="outline" onClick={() => router.push(`/quotes/${budget.id}/edit`)} className="bg-white text-black border-gray-300 hover:bg-gray-50">
                         <PencilIcon className="mr-2 h-4 w-4" /> Editar
                     </Button>
 
-                    <Button variant="outline" onClick={() => setPdfModalOpen(true)}>
+                    <Button variant="outline" onClick={() => setPdfModalOpen(true)} className="bg-white text-black border-gray-300 hover:bg-gray-50">
                         <FileText className="mr-2 h-4 w-4" /> PDF
                     </Button>
+
+                    {budget.trackingId && (
+                        <Button variant="outline" onClick={() => router.push(`/trackings/${budget.trackingId}`)} className="bg-white text-blue-700 border-blue-200 hover:bg-blue-50">
+                            <Activity className="mr-2 h-4 w-4" /> Ir a Seguimiento
+                        </Button>
+                    )}
 
                     {budget.estado === 'pending' || budget.estado === 'draft' ? (
                         <Button onClick={handleApprove} disabled={approving} className="bg-green-600 hover:bg-green-700">
@@ -500,34 +393,4 @@ export default function BudgetDetailPage() {
 }
 
 // Utility to convert SVG string to PNG Data URI
-async function convertSvgToPng(svgString: string): Promise<string> {
-    return new Promise((resolve, reject) => {
-        // Enforce dimensions if missing to avoid 0x0
-        if (!svgString.includes('width=') && !svgString.includes('height=')) {
-            svgString = svgString.replace('<svg ', '<svg width="400" height="150" ');
-        }
-
-        const img = new Image();
-        const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
-        const url = URL.createObjectURL(svgBlob);
-
-        img.onload = () => {
-            const canvas = document.createElement("canvas");
-            canvas.width = img.width || 400; // Fallback
-            canvas.height = img.height || 150; // Fallback
-            const ctx = canvas.getContext("2d");
-            if (!ctx) {
-                reject("No 2d context");
-                return;
-            }
-            ctx.drawImage(img, 0, 0);
-            URL.revokeObjectURL(url);
-            resolve(canvas.toDataURL("image/png"));
-        };
-        img.onerror = (e) => {
-            URL.revokeObjectURL(url);
-            reject(e);
-        };
-        img.src = url;
-    });
-}
+// (Removed local convertSvgToPng - imported from mapper)

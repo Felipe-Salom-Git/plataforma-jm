@@ -20,6 +20,10 @@ export interface Cliente {
   cuit?: string;
   createdAt: number;
   updatedAt: number;
+  // Tracking Info
+  lastQuoteId?: string;
+  lastQuoteNumber?: string;
+  activeTrackingId?: string;
 }
 
 // --- Stock / Materiales ---
@@ -114,6 +118,66 @@ export interface Presupuesto extends EntidadBase {
   }[];
   notQuotedItems?: string[];
   paymentMethod?: string;
+
+  // Workflow
+  trackingId?: string;
+  approvedAt?: number;
+}
+
+
+// --- Tracking ---
+export interface TrackingTask {
+  id: string;
+  text: string;
+  completed: boolean;
+  originalItemId?: string;
+}
+
+export type MaterialStatus = 'planned' | 'bought' | 'used';
+
+export interface TrackingMaterial {
+  id: string;
+  name: string;
+  quantity: number;
+  unit: string;
+  status: MaterialStatus;
+  originalMaterialId?: string;
+}
+
+export interface DailyLog {
+  id: string;
+  date: number;
+  content: string;
+  author?: string;
+}
+
+export interface Tracking extends EntidadBase {
+  quoteId: string;
+  quoteNumber: string;
+  title: string;
+
+  clientId: string;
+  clientSnapshot: ClienteSnapshot;
+
+  // Execution
+  tasks: TrackingTask[];
+  materials: TrackingMaterial[];
+  schedule?: {
+    startDate?: number;
+    endDate?: number;
+    startTime?: string;
+    endTime?: string;
+  };
+  dailyLogs: DailyLog[];
+
+  // Financials
+  pagos: Pago[];
+  saldoPendiente: number;
+  total: number;
+
+  status: 'pending_start' | 'in_progress' | 'completed' | 'canceled';
+
+  presupuestoRef?: string;
 }
 
 // --- Calendario ---

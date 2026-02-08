@@ -3,7 +3,11 @@ import {
     Timestamp,
     serverTimestamp,
     increment,
-    doc
+    doc,
+    getDocs,
+    query,
+    where,
+    collection
 } from "firebase/firestore";
 import { db, getTenantCollection, getTenantDoc, TENANT_ID } from "@/lib/firebase/firestore";
 import type {
@@ -11,16 +15,24 @@ import type {
     Material,
     ChecklistItem,
     Pago,
-    MovimientoStock
+    MovimientoStock,
+    Cliente,
+    Tracking,
+    ClienteSnapshot,
+    TrackingTask,
+    TrackingMaterial
 } from "@/lib/types";
 
 // --- Helpers ---
-const generateChecklistFromItems = (items: any[], materials: any[] = []): ChecklistItem[] => {
-    const checklist: ChecklistItem[] = [];
+const generateTrackingTasks = (items: any[]): TrackingTask[] => {
+    if (!Array.isArray(items)) return [];
 
-    // Helper to format text
-    const formatItemText = (mainText: string, qty?: number | string, unit?: string) => {
-        let text = mainText;
+    return items.map((item, index) => {
+        const desc = item.descripcion || item.task || "Ítem sin descripción";
+        const qty = item.cantidad ?? item.quantity;
+        const unit = item.unidad || item.unit;
+
+        let text = desc;
         const details = [];
         if (qty !== undefined && qty !== null && qty !== "") details.push(qty);
         if (unit) details.push(unit);
@@ -28,41 +40,39 @@ const generateChecklistFromItems = (items: any[], materials: any[] = []): Checkl
         if (details.length > 0) {
             text += ` (${details.join(" ")})`;
         }
-        return text;
-    };
 
-    // Process Main Items
-    if (Array.isArray(items)) {
-        items.forEach((item, index) => {
-            // Fallback for legacy fields: task vs descripcion, unit vs unidad
-            const desc = item.descripcion || item.task || "Ítem sin descripción";
-            const qty = item.cantidad ?? item.quantity;
-            const unit = item.unidad || item.unit;
+        return {
+            id: `task_${Date.now()}_${index}`,
+            text: text,
+            completed: false,
+            originalItemId: item.id
+        };
+    });
+};
 
-            checklist.push({
-                id: `chk_item_${Date.now()}_${index}`,
-                texto: formatItemText(desc, qty, unit),
-                completado: false
-            });
-        });
-    }
+const generateTrackingMaterials = (materials: any[]): TrackingMaterial[] => {
+    if (!Array.isArray(materials)) return [];
 
-    // Process Materials
-    if (materials && Array.isArray(materials)) {
-        materials.forEach((mat, index) => {
-            const name = mat.name || mat.nombre || "Material sin nombre";
-            const qty = mat.quantity ?? mat.cantidad;
-            const unit = mat.unit || mat.unidad;
+    return materials.map((mat, index) => ({
+        id: `mat_${Date.now()}_${index}`,
+        name: mat.name || mat.nombre || "Material sin nombre",
+        quantity: mat.quantity ?? mat.cantidad ?? 0,
+        unit: mat.unit || mat.unidad || "u",
+        status: 'planned',
+        originalMaterialId: mat.id
+    }));
+};
 
-            checklist.push({
-                id: `chk_mat_${Date.now()}_${index}`,
-                texto: formatItemText(`Material: ${name}`, qty, unit),
-                completado: false
-            });
-        });
-    }
-
-    return checklist;
+/**
+ * Helper to remove undefined keys from an object (Firestore doesn't support undefined)
+ */
+const stripUndefined = (obj: any): any => {
+    return Object.entries(obj).reduce((acc, [key, value]) => {
+        if (value !== undefined) {
+            acc[key] = value;
+        }
+        return acc;
+    }, {} as any);
 };
 
 /**
@@ -71,17 +81,31 @@ const generateChecklistFromItems = (items: any[], materials: any[] = []): Checkl
  * 2. Reserva stock (comprometido += cantidad).
  * 3. Actualiza estado presupuesto a 'approved'.
  * 4. Genera Checklist de seguimiento.
- * 5. Registra Movimientos de Stock (log).
+ * 5. Upsert Cliente (Clients Collection).
+ * 6. Genera Tracking (Trackings Collection).
+ * 7. Links everything via IDs.
+ * 8. Registra Movimientos de Stock (log).
  */
 export const approveBudget = async (
-    tenantId: string, // Kept for interface compatibility, though we use fixed TENANT_ID internally or could use this param if passed correctly
+    tenantId: string, // Kept for interface compatibility
     presupuestoId: string
 ): Promise<void> => {
-    // We use the helper to ensure we point to the correct tenant collection
-    // Collection Name MUST match list/create service: "quotes"
     const presupuestoRef = getTenantDoc("quotes", presupuestoId);
 
     try {
+        // --- Step 0: Pre-fetch outside transaction to find Client ---
+        // We need budget data to search for client
+        // Note: In a high-concurrency env, this snapshot could be stale, but we re-read inside tx.
+        // For Client search, we accept slight race condition on creation.
+
+        // 1. Get snapshot for logic
+        // We can't use getDoc here easily without importing it, but we can reuse the ref inside transaction for the "official" read.
+        // However, to search for the client, we need the data NOW.
+        // Let's rely on the transaction to do everything if we use deterministic IDs for Clients.
+        // Strategy: Deterministic Client ID based on Normalized Email or Phone.
+        // client_${normalized_email} OR client_${normalized_phone} OR client_${hash(name)}
+        // This avoids query inside transaction.
+
         await runTransaction(db, async (transaction) => {
             // 1. Leer Presupuesto
             const pDoc = await transaction.get(presupuestoRef);
@@ -90,12 +114,100 @@ export const approveBudget = async (
             const presupuesto = pDoc.data() as Presupuesto;
             if (presupuesto.estado === 'approved') throw new Error("Ya está aprobado");
 
-            // 2. Preparar lecturas de materiales (solo los que son 'material' y tienen ID)
+            // --- Client Logic (Upsert) ---
+            const clientSnap = presupuesto.clienteSnapshot;
+            let clientKey = "";
+            if (clientSnap.email) clientKey = clientSnap.email.toLowerCase().trim();
+            else if (clientSnap.telefono) clientKey = clientSnap.telefono.replace(/\D/g, '');
+            else clientKey = clientSnap.nombre.toLowerCase().trim().replace(/\s+/g, '_');
+
+            // Ensure valid ID characters
+            const safeClientKey = clientKey.replace(/[^a-zA-Z0-9_]/g, '');
+            const clientId = `client_${safeClientKey}`;
+            const clientRef = getTenantDoc("clientes", clientId); // FIXED: clients -> clientes
+
+            console.log("quoteRef.path:", presupuestoRef.path);
+            console.log("clientRef.path:", clientRef.path);
+
+            const cDoc = await transaction.get(clientRef);
+
+            // New Client Data
+            const now = Date.now();
+            const clientData: Partial<Cliente> = {
+                nombre: clientSnap.nombre,
+                email: clientSnap.email,
+                telefono: clientSnap.telefono,
+                direccion: clientSnap.direccion,
+                cuit: clientSnap.cuit,
+                updatedAt: now,
+                lastQuoteId: presupuesto.id,
+                lastQuoteNumber: presupuesto.numero,
+                ownerId: tenantId
+            };
+
+            // Sanitize clientData
+            const sanitizedClientData = stripUndefined(clientData);
+
+            if (!cDoc.exists()) {
+                // Create
+                transaction.set(clientRef, {
+                    ...sanitizedClientData,
+                    id: clientId,
+                    createdAt: now
+                });
+            } else {
+                // Update
+                transaction.update(clientRef, sanitizedClientData);
+            }
+
+            // --- Tracking Logic (Create) ---
+            const trackingRef = doc(getTenantCollection("trackings"));
+            console.log("trackingRef.path:", trackingRef.path);
+            const tasks = generateTrackingTasks(presupuesto.items);
+            const materials = generateTrackingMaterials((presupuesto as any).materials);
+
+            const tracking: Tracking = {
+                id: trackingRef.id,
+                ownerId: tenantId,
+                createdAt: now,
+                updatedAt: now,
+
+                quoteId: presupuesto.id,
+                quoteNumber: presupuesto.numero || "??",
+                title: presupuesto.titulo || (presupuesto as any).title || "Trabajo",
+
+                clientId: clientId,
+                clientSnapshot: clientSnap,
+
+                tasks: tasks,
+                materials: materials,
+                dailyLogs: [],
+
+                pagos: [],
+                saldoPendiente: presupuesto.total || 0,
+                total: presupuesto.total || 0,
+
+                status: 'pending_start', // or 'in_progress'
+                presupuestoRef: presupuesto.id
+            };
+
+            // Sanitize tracking data
+            const sanitizedTracking = stripUndefined(tracking);
+
+            transaction.set(trackingRef, sanitizedTracking);
+
+            // Update Client with Active Tracking if none
+            // We set it to this new tracking. If user had another one, this overwrites as "current".
+            transaction.update(clientRef, {
+                activeTrackingId: tracking.id
+            });
+
+            // --- Stock Logic (Existing) ---
+            // 2. Preparar lecturas de materiales
             const materialItems = presupuesto.items.filter(
                 i => i.tipo === 'material' && i.materialReferenceId
             );
 
-            // Materiales are also at tenant level: tenants/{id}/materiales
             const materialRefs = materialItems.map(i =>
                 getTenantDoc("materiales", i.materialReferenceId!)
             );
@@ -108,14 +220,9 @@ export const approveBudget = async (
                 const mDoc = materialDocs[i];
                 const item = materialItems[i];
 
-                if (!mDoc.exists()) {
-                    // Opcional: ignorar o fallar. Aquí fallamos por seguridad.
-                    throw new Error(`Material ID ${item.materialReferenceId} no encontrado`);
-                }
+                if (!mDoc.exists()) throw new Error(`Material ID ${item.materialReferenceId} no encontrado`);
 
                 const material = mDoc.data() as Material;
-
-                // Update: Incrementar 'stockComprometido'
                 const newComprometido = ((material as any)['stockComprometido'] || 0) + item.cantidad;
 
                 transaction.update(mDoc.ref, {
@@ -128,31 +235,32 @@ export const approveBudget = async (
                 const movimientoRef = doc(getTenantCollection("movimientos"));
                 const movimiento: MovimientoStock = {
                     id: movimientoRef.id,
-                    ownerId: tenantId, // Or authorized user ID if available, but for now tenantId
-                    createdAt: Date.now(),
-                    updatedAt: Date.now(),
+                    ownerId: tenantId,
+                    createdAt: now,
+                    updatedAt: now,
                     materialId: material.id,
                     tipo: 'salida',
                     cantidad: item.cantidad,
                     referencia: `Reserva Presupuesto #${presupuesto.numero || presupuestoId}`,
-                    fecha: Date.now()
+                    fecha: now
                 };
-                transaction.set(movimientoRef, movimiento);
+                transaction.set(movimientoRef, stripUndefined(movimiento));
             }
 
-            // 4. Generar Checklist
-            const checklist = generateChecklistFromItems(presupuesto.items, (presupuesto as any).materials);
-
-            // 5. Actualizar Presupuesto
-            transaction.update(presupuestoRef, {
+            // --- Update Quote (Final) ---
+            const quoteUpdates = {
                 estado: 'approved',
-                checklist: checklist,
-                saldoPendiente: presupuesto.total || 0, // Inicializa deuda
-                updatedAt: Date.now()
-            });
+                approvedAt: now,
+                updatedAt: now,
+                trackingId: tracking.id,
+
+                saldoPendiente: presupuesto.total || 0
+            };
+
+            transaction.update(presupuestoRef, stripUndefined(quoteUpdates));
         });
 
-        console.log("Presupuesto aprobado con éxito");
+        console.log("Presupuesto aprobado, Cliente y Tracking actualizados.");
 
     } catch (error) {
         console.error("Error aprobando presupuesto:", error);

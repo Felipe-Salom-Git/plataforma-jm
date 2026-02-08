@@ -1,0 +1,92 @@
+import {
+    updateDoc,
+    doc,
+    getDoc,
+    arrayUnion,
+    arrayRemove
+} from "firebase/firestore";
+import { getTenantDoc } from "../firebase/firestore";
+import { Tracking, TrackingTask, TrackingMaterial, DailyLog, Pago } from "../types";
+
+const stripUndefined = (obj: any): any => {
+    return Object.entries(obj).reduce((acc, [key, value]) => {
+        if (value !== undefined) acc[key] = value;
+        return acc;
+    }, {} as any);
+};
+
+export const TrackingsService = {
+    getById: async (tenantId: string, id: string): Promise<Tracking | null> => {
+        const docRef = getTenantDoc("trackings", id);
+        const snap = await getDoc(docRef);
+        if (!snap.exists()) return null;
+        const data = snap.data();
+        return {
+            id: snap.id,
+            ...data,
+            tasks: data.tasks || [],
+            materials: data.materials || [],
+            dailyLogs: data.dailyLogs || [],
+            pagos: data.pagos || []
+        } as Tracking;
+    },
+
+    update: async (tenantId: string, id: string, data: Partial<Tracking>) => {
+        const docRef = getTenantDoc("trackings", id);
+        await updateDoc(docRef, stripUndefined({ ...data, updatedAt: Date.now() }));
+    },
+
+    // --- Tasks ---
+    addTask: async (tenantId: string, trackingId: string, task: TrackingTask) => {
+        const docRef = getTenantDoc("trackings", trackingId);
+        await updateDoc(docRef, {
+            tasks: arrayUnion(stripUndefined(task)),
+            updatedAt: Date.now()
+        });
+    },
+
+    updateTasks: async (tenantId: string, trackingId: string, tasks: TrackingTask[]) => {
+        // Replace entire array for updates like reordering or editing
+        const docRef = getTenantDoc("trackings", trackingId);
+        await updateDoc(docRef, {
+            tasks: tasks.map(stripUndefined),
+            updatedAt: Date.now()
+        });
+    },
+
+    // --- Materials ---
+    addMaterial: async (tenantId: string, trackingId: string, material: TrackingMaterial) => {
+        const docRef = getTenantDoc("trackings", trackingId);
+        await updateDoc(docRef, {
+            materials: arrayUnion(stripUndefined(material)),
+            updatedAt: Date.now()
+        });
+    },
+
+    updateMaterials: async (tenantId: string, trackingId: string, materials: TrackingMaterial[]) => {
+        const docRef = getTenantDoc("trackings", trackingId);
+        await updateDoc(docRef, {
+            materials: materials.map(stripUndefined),
+            updatedAt: Date.now()
+        });
+    },
+
+    // --- Daily Logs ---
+    addLog: async (tenantId: string, trackingId: string, log: DailyLog) => {
+        const docRef = getTenantDoc("trackings", trackingId);
+        await updateDoc(docRef, {
+            dailyLogs: arrayUnion(stripUndefined(log)),
+            updatedAt: Date.now()
+        });
+    },
+
+    // --- Payments ---
+    registerPayment: async (tenantId: string, trackingId: string, payment: Pago, newTotalPaid: number, total: number) => {
+        const docRef = getTenantDoc("trackings", trackingId);
+        await updateDoc(docRef, {
+            pagos: arrayUnion(stripUndefined(payment)),
+            saldoPendiente: total - newTotalPaid,
+            updatedAt: Date.now()
+        });
+    }
+};
