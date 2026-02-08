@@ -126,20 +126,27 @@ export default function BudgetDetailPage() {
                     </Button>
                     <div>
                         <div className="flex items-center gap-3">
-                            <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+                            <h1 className="text-3xl font-bold tracking-tight text-foreground">
                                 {budget.titulo ?? (budget as any).title ?? (budget as any).workTitle ?? "Presupuesto"}
                             </h1>
-                            <Badge variant="outline" className={
-                                budget.estado === 'approved' ? 'bg-green-100 text-green-800 border-green-200 uppercase' :
-                                budget.estado === 'pending' ? 'bg-yellow-100 text-yellow-900 border-yellow-200 uppercase' :
-                                'bg-slate-100 text-slate-800 border-slate-200 uppercase'
+                            <Badge variant={
+                                budget.estado === 'approved' ? 'default' :
+                                    budget.estado === 'pending' ? 'secondary' : 'outline'
+                            } className={
+                                budget.estado === 'approved' ? 'bg-green-100 text-green-700 hover:bg-green-200 border-0' :
+                                    budget.estado === 'pending' ? 'bg-amber-100 text-amber-800 hover:bg-amber-200 border-0' :
+                                        'text-muted-foreground'
                             }>
                                 {budget.estado === 'draft' ? 'Borrador' :
-                                 budget.estado === 'approved' ? 'Aprobado' :
-                                 budget.estado === 'pending' ? 'Pendiente' : budget.estado}
+                                    budget.estado === 'approved' ? 'Aprobado' :
+                                        budget.estado === 'pending' ? 'Pendiente' : budget.estado}
                             </Badge>
                         </div>
-                        <p className="text-sm text-muted-foreground mt-1">#{budget.numero || 'BORRADOR'} • {formatDate((budget as any).date || budget.createdAt)}</p>
+                        <p className="text-sm text-muted-foreground mt-1 gap-2 flex items-center">
+                            <span className="font-mono bg-muted px-1 rounded">#{budget.numero || 'BORRADOR'}</span>
+                            <span>•</span>
+                            <span>{formatDate((budget as any).date || budget.createdAt)}</span>
+                        </p>
                     </div>
                 </div>
 
@@ -191,14 +198,14 @@ export default function BudgetDetailPage() {
                             <CardTitle>Ítems del Presupuesto</CardTitle>
                         </CardHeader>
                         <CardContent className="p-0">
-                            <div className="rounded-md border">
+                            <div className="rounded-xl border overflow-hidden">
                                 <table className="w-full text-sm">
-                                    <thead className="bg-muted/50">
-                                        <tr className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted">
-                                            <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Descripción</th>
-                                            <th className="h-12 px-4 text-right align-middle font-medium text-muted-foreground">Cant.</th>
-                                            <th className="h-12 px-4 text-right align-middle font-medium text-muted-foreground">Unitario</th>
-                                            <th className="h-12 px-4 text-right align-middle font-medium text-muted-foreground">Total</th>
+                                    <thead className="bg-muted/40">
+                                        <tr className="border-b transition-colors">
+                                            <th className="h-10 px-4 text-left align-middle font-medium text-muted-foreground">Descripción</th>
+                                            <th className="h-10 px-4 text-right align-middle font-medium text-muted-foreground">Cant.</th>
+                                            <th className="h-10 px-4 text-right align-middle font-medium text-muted-foreground">Unitario</th>
+                                            <th className="h-10 px-4 text-right align-middle font-medium text-muted-foreground">Total</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -211,14 +218,14 @@ export default function BudgetDetailPage() {
                                             const type = item.tipo || item.type || "";
 
                                             return (
-                                                <tr key={item.id || `item-${idx}-${desc}`} className="border-b transition-colors hover:bg-muted/50">
+                                                <tr key={item.id || `item-${idx}-${desc}`} className="border-b last:border-0 transition-colors hover:bg-muted/50">
                                                     <td className="p-4 align-middle">
-                                                        <div className="font-medium">{desc}</div>
+                                                        <div className="font-medium text-foreground">{desc}</div>
                                                         <div className="text-xs text-muted-foreground capitalize">{type}</div>
                                                     </td>
-                                                    <td className="p-4 align-middle text-right">{qty} {unit}</td>
-                                                    <td className="p-4 align-middle text-right">${(unitPrice).toLocaleString()}</td>
-                                                    <td className="p-4 align-middle text-right font-bold">${(total).toLocaleString()}</td>
+                                                    <td className="p-4 align-middle text-right text-muted-foreground">{qty} {unit}</td>
+                                                    <td className="p-4 align-middle text-right text-muted-foreground">${(unitPrice).toLocaleString()}</td>
+                                                    <td className="p-4 align-middle text-right font-medium text-foreground">${(total).toLocaleString()}</td>
                                                 </tr>
                                             );
                                         })}

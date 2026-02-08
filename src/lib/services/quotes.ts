@@ -1,6 +1,4 @@
 import {
-    addDoc,
-    updateDoc,
     getDocs,
     query,
     orderBy,
@@ -8,10 +6,12 @@ import {
     serverTimestamp,
     doc,
     getDoc,
+    deleteDoc, // Added
     where
 } from "firebase/firestore";
 import { getTenantCollection, getTenantDoc, TENANT_ID } from "../firebase/firestore";
 import { QuoteFormValues } from "../validation/schemas";
+import { safeAddDoc, safeUpdateDoc } from "../utils/firestore-helpers";
 // Re-export type if needed or strictly use schemas
 // But we might need 'id' which is not in FormValues. 
 
@@ -65,7 +65,7 @@ export const QuotesService = {
             updatedAt: serverTimestamp(),
         };
 
-        const docRef = await addDoc(colRef, docData);
+        const docRef = await safeAddDoc(colRef, docData);
 
         return { id: docRef.id };
     },
@@ -83,7 +83,12 @@ export const QuotesService = {
             updates.validezDias = Math.ceil((new Date(values.validUntil).getTime() - new Date(values.date).getTime()) / (1000 * 60 * 60 * 24));
         }
 
-        await updateDoc(docRef, updates);
+        await safeUpdateDoc(docRef, updates);
+    },
+
+    delete: async (id: string) => {
+        const docRef = getTenantDoc("quotes", id);
+        await deleteDoc(docRef);
     },
 
     // Listing methods retained/updated 

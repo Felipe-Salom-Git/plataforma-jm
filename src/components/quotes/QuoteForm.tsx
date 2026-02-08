@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import { useTenant } from '@/lib/hooks/useTenant';
 import { QuotesService } from '@/lib/services/quotes';
 import { TemplatesService } from '@/lib/services/templates';
+import { ClientsService } from '@/lib/services/clients'; // Added
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,9 +17,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Trash2, Plus, Save, Loader2, ArrowLeft, MoreHorizontal, FileText, LayoutTemplate } from 'lucide-react';
 import { QuoteFormSchema, QuoteFormValues, TemplateValues } from '@/lib/validation/schemas';
 import { toast } from 'sonner';
+import { ClientPicker } from './ClientPicker';
 
 // --- PROPS ---
 interface QuoteFormProps {
@@ -43,10 +46,13 @@ export default function QuoteForm({ initialData, quoteId }: QuoteFormProps) {
         validUntil: initialData.validUntil ? initialData.validUntil : (initialData.validezDias ? formatDate(new Date(Date.now() + initialData.validezDias * 86400000)) : undefined),
         status: initialData.estado || 'draft',
         client: {
+            id: initialData.clienteId,
             name: initialData.clienteSnapshot?.nombre || "",
             lines: initialData.clienteSnapshot?.direccion ? [initialData.clienteSnapshot.direccion] : [""],
             email: initialData.clienteSnapshot?.email || "",
-            phone: initialData.clienteSnapshot?.telefono || ""
+            phone: initialData.clienteSnapshot?.telefono || "",
+            cuit: initialData.clienteSnapshot?.cuit || "",
+            frecuente: initialData.clienteSnapshot?.frecuente || false
         },
         items: initialData.items?.map((i: any) => ({
             task: i.descripcion || i.task,
@@ -71,7 +77,7 @@ export default function QuoteForm({ initialData, quoteId }: QuoteFormProps) {
         date: formatDate(new Date()),
         validUntil: formatDate(new Date(Date.now() + 15 * 86400000)),
         status: 'draft',
-        client: { name: "", lines: [""], email: "", phone: "" },
+        client: { name: "", lines: [""], email: "", phone: "", cuit: "", frecuente: false },
         items: [{ task: '', quantity: 1, unitPrice: 0, total: 0 }],
         materials: [],
         descuentoGlobal: 0,
@@ -185,7 +191,10 @@ export default function QuoteForm({ initialData, quoteId }: QuoteFormProps) {
     if (!isAuthenticated) return <div className="p-8">Acceso denegado</div>;
 
     return (
-        <form onSubmit={form.handleSubmit(onSubmit, (errors) => console.error("Validation errors:", errors))} className="min-h-screen bg-slate-50/50 pb-20">
+        <form onSubmit={form.handleSubmit(onSubmit, (errors) => {
+            console.error("Validation errors:", errors);
+            toast.error("Por favor revise los campos requeridos (ver consola)");
+        })} className="min-h-screen bg-slate-50/50 pb-20">
             {/* STICKY HEADER */}
             <header className="sticky top-0 z-10 bg-white border-b px-6 py-4 flex items-center justify-between shadow-sm">
                 <div className="flex items-center gap-4">
@@ -226,7 +235,7 @@ export default function QuoteForm({ initialData, quoteId }: QuoteFormProps) {
                         <CardContent className="space-y-4">
                             <div className="space-y-1">
                                 <label className="text-xs font-medium text-slate-500">Título de la Obra</label>
-                                <Input {...form.register('title')} placeholder="Ej: Remodelación Cocina" className="font-medium bg-white text-slate-900 border-slate-200 placeholder:text-slate-400" />
+                                <Input {...form.register('title')} placeholder="Ej: Remodelación Cocina" className="font-medium" />
                                 {form.formState.errors.title && <p className="text-red-500 text-xs">{form.formState.errors.title.message}</p>}
                             </div>
                             <div className="grid grid-cols-2 gap-3">
@@ -235,7 +244,6 @@ export default function QuoteForm({ initialData, quoteId }: QuoteFormProps) {
                                     <Input
                                         type="date"
                                         {...form.register('date')}
-                                        className="bg-white text-slate-900 border-slate-200"
                                     />
                                     {form.formState.errors.date && <p className="text-red-500 text-xs">{form.formState.errors.date.message}</p>}
                                 </div>
@@ -246,7 +254,6 @@ export default function QuoteForm({ initialData, quoteId }: QuoteFormProps) {
                                         {...form.register('validUntil', {
                                             onChange: () => setValidUntilManuallyEdited(true)
                                         })}
-                                        className="bg-white text-slate-900 border-slate-200"
                                     />
                                     {form.formState.errors.validUntil && <p className="text-red-500 text-xs">{form.formState.errors.validUntil.message}</p>}
                                 </div>
@@ -275,30 +282,78 @@ export default function QuoteForm({ initialData, quoteId }: QuoteFormProps) {
                         <CardContent className="grid md:grid-cols-2 gap-4">
                             <div className="space-y-1 md:col-span-2">
                                 <label className="text-xs font-medium text-slate-500">Nombre / Razón Social</label>
-                                <Input {...form.register('client.name')} placeholder="Nombre del cliente" className="bg-white text-slate-900 border-slate-200 placeholder:text-slate-400" />
+                                <div className="flex gap-2 w-full">
+                                    {/* Using flex-1 to let the combobox take remaining space */}
+                                    <ClientPicker
+                                        className="flex-1"
+                                        currentName={form.watch('client.name')}
+                                        onNameChange={(name) => form.setValue('client.name', name, { shouldDirty: true })}
+                                        valueClientId={form.watch('client.id')}
+                                        onSelect={(c) => {
+                                            form.setValue('client.name', c.nombre);
+                                            form.setValue('client.email', c.email || "");
+                                            form.setValue('client.phone', c.telefono || "");
+                                            form.setValue('client.lines.0', c.direccion || "");
+                                            form.setValue('client.cuit', c.cuit || "");
+                                            form.setValue('client.frecuente', c.frecuente || false);
+
+                                            if (c.id) {
+                                                form.setValue('client.id', c.id);
+                                                // Ideally we update lastUsedAt here or on Submit. 
+                                                // The requirement saith: "Update lastUsedAt del cliente."
+                                                // We should probably do it here fire-and-forget or inside the picker.
+                                                // Let's do it on submit to avoid too many writes? 
+                                                // Requirements said "Al seleccionar un cliente: Update lastUsedAt".
+                                                // So we do it here.
+                                                ClientsService.update(tenantId!, c.id, { lastUsedAt: Date.now() }).catch(console.error);
+                                            }
+                                        }}
+                                    />
+                                    {/* Hidden input to register validations if needed */}
+                                    <input type="hidden" {...form.register('client.name')} />
+                                </div>
                                 {form.formState.errors.client?.name && <p className="text-red-500 text-xs">{form.formState.errors.client.name.message}</p>}
                             </div>
+
                             <div className="space-y-1 md:col-span-2">
                                 <label className="text-xs font-medium text-slate-500">Dirección</label>
-                                <Input {...form.register('client.lines.0')} placeholder="Dirección completa" className="bg-white text-slate-900 border-slate-200 placeholder:text-slate-400" />
+                                <Input {...form.register('client.lines.0')} placeholder="Dirección completa" />
                             </div>
                             <div className="space-y-1">
                                 <label className="text-xs font-medium text-slate-500">Email</label>
-                                <Input {...form.register('client.email')} placeholder="cliente@email.com" className="bg-white text-slate-900 border-slate-200 placeholder:text-slate-400" />
+                                <Input {...form.register('client.email')} placeholder="cliente@email.com" />
                                 {form.formState.errors.client?.email && <p className="text-red-500 text-xs">{form.formState.errors.client.email.message}</p>}
                             </div>
                             <div className="space-y-1">
                                 <label className="text-xs font-medium text-slate-500">Teléfono</label>
-                                <Input {...form.register('client.phone')} placeholder="+56 9..." className="bg-white text-slate-900 border-slate-200 placeholder:text-slate-400" />
+                                <Input {...form.register('client.phone')} placeholder="+56 9..." />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-xs font-medium text-slate-500">CUIT / RUT</label>
+                                <Input {...form.register('client.cuit')} placeholder="11 dígitos (opcional)" />
+                                {form.formState.errors.client?.cuit && <p className="text-red-500 text-xs">{form.formState.errors.client.cuit.message}</p>}
+                            </div>
+                            <div className="flex items-center gap-2 pt-6">
+                                <Checkbox
+                                    id="frecuente"
+                                    checked={form.watch('client.frecuente')}
+                                    onCheckedChange={(checked) => form.setValue('client.frecuente', checked as boolean)}
+                                />
+                                <label htmlFor="frecuente" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer text-slate-600">
+                                    Cliente Frecuente ⭐
+                                </label>
                             </div>
                         </CardContent>
                     </Card>
                 </div>
 
                 {/* ITEMS SECTION */}
-                <Card className="shadow-sm border-0 ring-1 ring-slate-200">
-                    <CardHeader className="flex flex-row items-center justify-between bg-slate-50/50 rounded-t-lg py-3">
-                        <CardTitle className="text-base font-semibold">Ítems / Tareas</CardTitle>
+                <Card className="border-border/50 shadow-sm">
+                    <CardHeader className="flex flex-row items-center justify-between pb-3">
+                        <div className="space-y-1">
+                            <CardTitle className="text-base font-semibold">Ítems / Tareas</CardTitle>
+                            <CardDescription>Detalla los trabajos a realizar</CardDescription>
+                        </div>
                         <Button type="button" size="sm" onClick={() => itemsFieldArray.append({ task: '', quantity: 1, unitPrice: 0, total: 0 })}>
                             <Plus className="h-4 w-4 mr-2" /> Agregar Item
                         </Button>
@@ -306,7 +361,7 @@ export default function QuoteForm({ initialData, quoteId }: QuoteFormProps) {
                     <CardContent className="p-0">
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm text-left">
-                                <thead className="bg-slate-50 text-slate-500 font-medium border-b">
+                                <thead className="bg-muted/40 text-muted-foreground font-medium border-b border-border/50">
                                     <tr>
                                         <th className="px-4 py-3 w-12 text-center">#</th>
                                         <th className="px-4 py-3">Descripción</th>
@@ -316,7 +371,7 @@ export default function QuoteForm({ initialData, quoteId }: QuoteFormProps) {
                                         <th className="px-4 py-3 w-12"></th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y">
+                                <tbody className="divide-y divide-border/50">
                                     {itemsFieldArray.fields.map((field, index) => {
                                         // Helper to update line total
                                         const updateLineTotal = (idx: number) => {
@@ -326,40 +381,38 @@ export default function QuoteForm({ initialData, quoteId }: QuoteFormProps) {
                                         }
 
                                         return (
-                                            <tr key={field.id} className="group hover:bg-slate-50/50">
-                                                <td className="px-4 py-3 text-center text-muted-foreground">{index + 1}</td>
+                                            <tr key={field.id} className="group hover:bg-muted/30 transition-colors">
+                                                <td className="px-4 py-3 text-center text-muted-foreground pt-5">{index + 1}</td>
                                                 <td className="px-4 py-3">
                                                     <Input
                                                         {...form.register(`items.${index}.task`)}
-                                                        className="bg-white text-slate-900 border-slate-200 placeholder:text-slate-400 px-2 h-8 font-medium focus-visible:ring-1 focus-visible:ring-slate-400"
+                                                        className="h-9 font-medium"
                                                         placeholder="Descripción de la tarea..."
                                                     />
-                                                    {form.formState.errors.items?.[index]?.task && <span className="text-red-500 text-[10px]">Requerido</span>}
+                                                    {form.formState.errors.items?.[index]?.task && <span className="text-destructive text-[10px] ml-2">Requerido</span>}
                                                 </td>
                                                 <td className="px-4 py-3">
                                                     <Input
                                                         type="number" step="1" min="0"
                                                         {...form.register(`items.${index}.quantity`, { valueAsNumber: true, onChange: () => updateLineTotal(index) })}
-                                                        className="bg-white text-slate-900 border-slate-200 px-2 h-8 text-right focus-visible:ring-1 focus-visible:ring-slate-400"
+                                                        className="text-right h-9"
                                                     />
                                                 </td>
                                                 <td className="px-4 py-3">
-                                                    <Input
-                                                        type="number" step="1" min="0"
-                                                        {...form.register(`items.${index}.unitPrice`, { valueAsNumber: true, onChange: () => updateLineTotal(index) })}
-                                                        className="bg-white text-slate-900 border-slate-200 px-2 h-8 text-right focus-visible:ring-1 focus-visible:ring-slate-400"
-                                                    />
+                                                    <div className="relative">
+                                                        <span className="absolute left-2 top-2.5 text-muted-foreground text-xs">$</span>
+                                                        <Input
+                                                            type="number" step="1" min="0"
+                                                            {...form.register(`items.${index}.unitPrice`, { valueAsNumber: true, onChange: () => updateLineTotal(index) })}
+                                                            className="text-right pl-5 h-9"
+                                                        />
+                                                    </div>
                                                 </td>
-                                                <td className="px-4 py-3 text-right font-medium text-slate-700">
-                                                    <Input
-                                                        readOnly
-                                                        step="1"
-                                                        {...form.register(`items.${index}.total`)}
-                                                        className="border-0 bg-transparent focus-visible:ring-0 px-0 text-right tabular-nums pointer-events-none"
-                                                    />
+                                                <td className="px-4 py-3 text-right font-medium text-foreground pt-4">
+                                                    $ {(form.watch(`items.${index}.total`) || 0).toLocaleString()}
                                                 </td>
-                                                <td className="px-4 py-3 text-center">
-                                                    <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-red-500" onClick={() => itemsFieldArray.remove(index)}>
+                                                <td className="px-4 py-3 text-center pt-3">
+                                                    <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => itemsFieldArray.remove(index)}>
                                                         <Trash2 className="h-4 w-4" />
                                                     </Button>
                                                 </td>
@@ -367,10 +420,10 @@ export default function QuoteForm({ initialData, quoteId }: QuoteFormProps) {
                                         )
                                     })}
                                 </tbody>
-                                <tfoot className="bg-slate-50/50 font-medium text-slate-700">
+                                <tfoot className="bg-muted/20 font-medium text-muted-foreground">
                                     <tr>
                                         <td colSpan={4} className="px-4 py-3 text-right">Subtotal Tareas:</td>
-                                        <td className="px-4 py-3 text-right">${itemsTotal.toLocaleString()}</td>
+                                        <td className="px-4 py-3 text-right text-foreground">${itemsTotal.toLocaleString()}</td>
                                         <td></td>
                                     </tr>
                                 </tfoot>
@@ -380,19 +433,21 @@ export default function QuoteForm({ initialData, quoteId }: QuoteFormProps) {
                 </Card>
 
                 {/* MATERIALS SECTION */}
-                <Card className="shadow-sm border-0 ring-1 ring-slate-200">
-                    <CardHeader className="flex flex-row items-center justify-between bg-slate-50/50 rounded-t-lg py-3">
-                        <CardTitle className="text-base font-semibold flex items-center gap-2">
-                            Materiales <Badge variant="outline" className="text-[10px] font-normal bg-slate-100 text-slate-600 border-slate-200">Opcional</Badge>
-                        </CardTitle>
-                        <Button type="button" variant="secondary" size="sm" onClick={() => materialsFieldArray.append({ name: '', quantity: 1, unitPrice: 0, total: 0 })}>
+                <Card className="border-border/50 shadow-sm">
+                    <CardHeader className="flex flex-row items-center justify-between pb-3">
+                        <div className="space-y-1">
+                            <CardTitle className="text-base font-semibold flex items-center gap-2">
+                                Materiales <Badge variant="secondary" className="text-[10px] font-normal">Opcional</Badge>
+                            </CardTitle>
+                        </div>
+                        <Button type="button" variant="outline" size="sm" onClick={() => materialsFieldArray.append({ name: '', quantity: 1, unitPrice: 0, total: 0 })}>
                             <Plus className="h-4 w-4 mr-2" /> Agregar Material
                         </Button>
                     </CardHeader>
                     <CardContent className="p-0">
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm text-left">
-                                <thead className="bg-slate-50 text-slate-500 font-medium border-b">
+                                <thead className="bg-muted/40 text-muted-foreground font-medium border-b border-border/50">
                                     <tr>
                                         <th className="px-4 py-3 w-12 text-center">#</th>
                                         <th className="px-4 py-3">Material</th>
@@ -403,7 +458,7 @@ export default function QuoteForm({ initialData, quoteId }: QuoteFormProps) {
                                         <th className="px-4 py-3 w-12"></th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y">
+                                <tbody className="divide-y divide-border/50">
                                     {materialsFieldArray.fields.map((field, index) => {
                                         const updateMatTotal = (idx: number) => {
                                             const qty = Math.round(form.getValues(`materials.${idx}.quantity`) || 0);
@@ -412,19 +467,19 @@ export default function QuoteForm({ initialData, quoteId }: QuoteFormProps) {
                                         }
 
                                         return (
-                                            <tr key={field.id} className="group hover:bg-slate-50/50">
-                                                <td className="px-4 py-3 text-center text-muted-foreground">{index + 1}</td>
+                                            <tr key={field.id} className="group hover:bg-muted/30 transition-colors">
+                                                <td className="px-4 py-3 text-center text-muted-foreground pt-4">{index + 1}</td>
                                                 <td className="px-4 py-3">
                                                     <Input
                                                         {...form.register(`materials.${index}.name`)}
-                                                        className="bg-white text-slate-900 border-slate-200 placeholder:text-slate-400 px-2 h-8 font-medium focus-visible:ring-1 focus-visible:ring-slate-400"
+                                                        className="h-9 font-medium"
                                                         placeholder="Nombre material..."
                                                     />
                                                 </td>
                                                 <td className="px-4 py-3">
                                                     <Input
                                                         {...form.register(`materials.${index}.unit`)}
-                                                        className="bg-white text-slate-900 border-slate-200 px-2 h-8 focus-visible:ring-1 focus-visible:ring-slate-400"
+                                                        className="h-9"
                                                         placeholder="u"
                                                     />
                                                 </td>
@@ -432,25 +487,21 @@ export default function QuoteForm({ initialData, quoteId }: QuoteFormProps) {
                                                     <Input
                                                         type="number" step="1" min="0"
                                                         {...form.register(`materials.${index}.quantity`, { valueAsNumber: true, onChange: () => updateMatTotal(index) })}
-                                                        className="bg-white text-slate-900 border-slate-200 px-2 h-8 text-right focus-visible:ring-1 focus-visible:ring-slate-400"
+                                                        className="text-right h-9"
                                                     />
                                                 </td>
                                                 <td className="px-4 py-3">
                                                     <Input
                                                         type="number" step="1" min="0"
                                                         {...form.register(`materials.${index}.unitPrice`, { valueAsNumber: true, onChange: () => updateMatTotal(index) })}
-                                                        className="bg-white text-slate-900 border-slate-200 px-2 h-8 text-right focus-visible:ring-1 focus-visible:ring-slate-400"
+                                                        className="text-right h-9"
                                                     />
                                                 </td>
-                                                <td className="px-4 py-3 text-right font-medium text-slate-700">
-                                                    <Input
-                                                        readOnly
-                                                        {...form.register(`materials.${index}.total`)}
-                                                        className="border-0 bg-transparent focus-visible:ring-0 px-0 text-right tabular-nums pointer-events-none"
-                                                    />
+                                                <td className="px-4 py-3 text-right font-medium text-foreground pt-4">
+                                                    $ {(form.watch(`materials.${index}.total`) || 0).toLocaleString()}
                                                 </td>
-                                                <td className="px-4 py-3 text-center">
-                                                    <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-red-500" onClick={() => materialsFieldArray.remove(index)}>
+                                                <td className="px-4 py-3 text-center pt-3">
+                                                    <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => materialsFieldArray.remove(index)}>
                                                         <Trash2 className="h-4 w-4" />
                                                     </Button>
                                                 </td>
@@ -465,10 +516,10 @@ export default function QuoteForm({ initialData, quoteId }: QuoteFormProps) {
                                         </tr>
                                     )}
                                 </tbody>
-                                <tfoot className="bg-slate-50/50 font-medium text-slate-700">
+                                <tfoot className="bg-muted/20 font-medium text-muted-foreground">
                                     <tr>
                                         <td colSpan={5} className="px-4 py-3 text-right">Subtotal Materiales:</td>
-                                        <td className="px-4 py-3 text-right">${materialsTotal.toLocaleString()}</td>
+                                        <td className="px-4 py-3 text-right text-foreground">${materialsTotal.toLocaleString()}</td>
                                         <td></td>
                                     </tr>
                                 </tfoot>
@@ -551,7 +602,7 @@ export default function QuoteForm({ initialData, quoteId }: QuoteFormProps) {
 
                     {/* TOTALS SUMMARY */}
                     <div>
-                        <Card className="bg-slate-900 text-white sticky top-24 shadow-lg">
+                        <Card className="bg-slate-900 text-white sticky top-24 shadow-lg border-slate-800">
                             <CardHeader>
                                 <CardTitle>Resumen Financiero</CardTitle>
                             </CardHeader>
@@ -592,7 +643,7 @@ export default function QuoteForm({ initialData, quoteId }: QuoteFormProps) {
                                         <span className="text-slate-400 text-sm">Total Final</span>
                                         <span className="text-3xl font-bold tracking-tight">${total.toLocaleString()}</span>
                                     </div>
-                                    <p className="text-right text-xs text-slate-500">Impuestos incluidos si aplica</p>
+                                    <div className="text-right text-xs text-slate-500">Impuestos incluidos si aplica</div>
                                 </div>
                             </CardContent>
                         </Card>
@@ -639,7 +690,7 @@ function TemplateField({ label, form, fieldName, templates, hideLabel }: any) {
                 )}
                 <Textarea
                     {...form.register(fieldName)}
-                    className="min-h-[100px] text-sm resize-y bg-white text-slate-900 border-slate-200 placeholder:text-slate-400"
+                    className="min-h-[100px] text-sm resize-y"
                     placeholder="Escribe aquí..."
                 />
             </div>

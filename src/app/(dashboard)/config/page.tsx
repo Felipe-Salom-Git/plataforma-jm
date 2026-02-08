@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import { SignaturePad, SignaturePadRef } from '@/components/ui/signature-pad';
 import {
     Select,
@@ -319,15 +320,15 @@ export default function ConfigPage() {
                                     <div className="border-t pt-4 mt-4">
                                         <Label className="mb-2 block">Firma Actual</Label>
                                         {hasSignature && signaturePreview ? (
-                                            <div className="border border-slate-200 rounded p-4 bg-white relative group">
-                                                <div dangerouslySetInnerHTML={{ __html: signaturePreview }} className="w-full h-32 flex items-center justify-center [&>svg]:h-full [&>svg]:w-full" />
+                                            <div className="border border-border rounded-lg p-4 bg-background relative group">
+                                                <div dangerouslySetInnerHTML={{ __html: signaturePreview }} className="w-full h-32 flex items-center justify-center [&>svg]:h-full [&>svg]:w-full text-foreground" />
                                                 <Button type="button" variant="destructive" size="icon" className="absolute top-2 right-2 h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity" onClick={deleteSignature}>
                                                     <Trash2 className="h-4 w-4" />
                                                 </Button>
                                             </div>
                                         ) : (
-                                            <div className="h-32 border-2 border-dashed border-slate-200 rounded flex items-center justify-center bg-slate-50">
-                                                <p className="text-slate-400 text-sm text-center px-4">
+                                            <div className="h-32 border-2 border-dashed border-muted rounded-lg flex items-center justify-center bg-muted/20">
+                                                <p className="text-muted-foreground text-sm text-center px-4">
                                                     Sin firma cargada.<br />Esto no se mostrará en el PDF hasta que subas una.
                                                 </p>
                                             </div>
@@ -345,36 +346,40 @@ export default function ConfigPage() {
                         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                             {filteredTemplates.map(tmpl => (
                                 <Card key={tmpl.id} className={!tmpl.active ? "opacity-60 border-dashed" : ""}>
-                                    <CardHeader className="py-4 bg-slate-50 flex flex-row justify-between items-start rounded-t-lg">
+                                    <CardHeader className="py-4 flex flex-row justify-between items-start rounded-t-lg bg-transparent pb-2">
                                         <div>
                                             <div className="font-semibold text-sm flex items-center gap-2">
                                                 {tmpl.title}
-                                                {tmpl.isDefault && <span className="flex items-center gap-1 bg-yellow-100 text-yellow-800 text-[10px] px-1.5 py-0.5 rounded border border-yellow-200"><Star className="h-3 w-3 fill-yellow-500 text-yellow-500" /> Default</span>}
-                                                {!tmpl.active && <span className="bg-gray-100 text-gray-500 text-[10px] px-1.5 py-0.5 rounded">Inactiva</span>}
+                                                {tmpl.isDefault && (
+                                                    <Badge variant="secondary" className="bg-amber-100 text-amber-800 hover:bg-amber-200 border-0 gap-1 px-1.5 h-5">
+                                                        <Star className="h-3 w-3 fill-amber-500 text-amber-500" /> Default
+                                                    </Badge>
+                                                )}
+                                                {!tmpl.active && <Badge variant="outline" className="text-muted-foreground border-muted-foreground/30 h-5">Inactiva</Badge>}
                                             </div>
                                         </div>
                                         <div className="flex gap-1">
                                             <Button
-                                                size="icon" variant="ghost" className="h-6 w-6 text-yellow-500 hover:text-yellow-600 hover:bg-yellow-50"
+                                                size="icon" variant="ghost" className="h-7 w-7 text-amber-500 hover:text-amber-600 hover:bg-amber-50"
                                                 title="Hacer Default"
                                                 onClick={() => handleSetDefault(tmpl)}
                                                 disabled={!tmpl.active || tmpl.isDefault}
                                             >
                                                 <Star className={`h-4 w-4 ${tmpl.isDefault ? "fill-current" : ""}`} />
                                             </Button>
-                                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => handleEdit(tmpl)}><Pencil className="h-3 w-3" /></Button>
-                                            <Button size="icon" variant="ghost" className="h-6 w-6 text-red-500" onClick={() => handleDelete(tmpl.id!)}><Trash2 className="h-3 w-3" /></Button>
-                                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => handleToggleActive(tmpl)} title={tmpl.active ? "Desactivar" : "Activar"}>
-                                                {tmpl.active ? <XCircle className="h-3 w-3 text-slate-400" /> : <CheckCircle2 className="h-3 w-3 text-green-500" />}
+                                            <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground" onClick={() => handleEdit(tmpl)}><Pencil className="h-3.5 w-3.5" /></Button>
+                                            <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:bg-destructive/10" onClick={() => handleDelete(tmpl.id!)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleToggleActive(tmpl)} title={tmpl.active ? "Desactivar" : "Activar"}>
+                                                {tmpl.active ? <XCircle className="h-3.5 w-3.5 text-muted-foreground" /> : <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />}
                                             </Button>
                                         </div>
                                     </CardHeader>
-                                    <CardContent className="pt-4 text-sm text-slate-600 whitespace-pre-wrap h-32 overflow-hidden text-ellipsis relative">
+                                    <CardContent className="pt-2 text-sm text-muted-foreground whitespace-pre-wrap h-32 overflow-hidden text-ellipsis relative">
                                         {tmpl.content}
                                     </CardContent>
                                 </Card>
                             ))}
-                            {filteredTemplates.length === 0 && <div className="col-span-3 text-center py-10 text-slate-400 border-2 border-dashed rounded-lg">No hay plantillas de este tipo.</div>}
+                            {filteredTemplates.length === 0 && <div className="col-span-3 text-center py-10 text-muted-foreground border-2 border-dashed border-muted rounded-lg bg-muted/10">No hay plantillas de este tipo.</div>}
                         </div>
                     )
                 )}

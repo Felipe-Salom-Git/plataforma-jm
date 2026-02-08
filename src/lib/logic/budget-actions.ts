@@ -22,6 +22,7 @@ import type {
     TrackingTask,
     TrackingMaterial
 } from "@/lib/types";
+import { removeUndefined, safeTxSet, safeTxUpdate } from "../utils/firestore-helpers";
 
 // --- Helpers ---
 const generateTrackingTasks = (items: any[]): TrackingTask[] => {
@@ -63,17 +64,7 @@ const generateTrackingMaterials = (materials: any[]): TrackingMaterial[] => {
     }));
 };
 
-/**
- * Helper to remove undefined keys from an object (Firestore doesn't support undefined)
- */
-const stripUndefined = (obj: any): any => {
-    return Object.entries(obj).reduce((acc, [key, value]) => {
-        if (value !== undefined) {
-            acc[key] = value;
-        }
-        return acc;
-    }, {} as any);
-};
+
 
 /**
  * Aprobación de Presupuesto
@@ -146,18 +137,16 @@ export const approveBudget = async (
             };
 
             // Sanitize clientData
-            const sanitizedClientData = stripUndefined(clientData);
-
             if (!cDoc.exists()) {
                 // Create
-                transaction.set(clientRef, {
-                    ...sanitizedClientData,
+                safeTxSet(transaction, clientRef, {
+                    ...clientData,
                     id: clientId,
                     createdAt: now
                 });
             } else {
                 // Update
-                transaction.update(clientRef, sanitizedClientData);
+                safeTxUpdate(transaction, clientRef, clientData);
             }
 
             // --- Tracking Logic (Create) ---
@@ -179,6 +168,8 @@ export const approveBudget = async (
                 clientId: clientId,
                 clientSnapshot: clientSnap,
 
+                quoteSnapshot: presupuesto, // SNAPSHOT COMPLETE
+
                 tasks: tasks,
                 materials: materials,
                 dailyLogs: [],
@@ -192,13 +183,11 @@ export const approveBudget = async (
             };
 
             // Sanitize tracking data
-            const sanitizedTracking = stripUndefined(tracking);
-
-            transaction.set(trackingRef, sanitizedTracking);
+            safeTxSet(transaction, trackingRef, tracking);
 
             // Update Client with Active Tracking if none
             // We set it to this new tracking. If user had another one, this overwrites as "current".
-            transaction.update(clientRef, {
+            safeTxUpdate(transaction, clientRef, {
                 activeTrackingId: tracking.id
             });
 
@@ -225,7 +214,7 @@ export const approveBudget = async (
                 const material = mDoc.data() as Material;
                 const newComprometido = ((material as any)['stockComprometido'] || 0) + item.cantidad;
 
-                transaction.update(mDoc.ref, {
+                safeTxUpdate(transaction, mDoc.ref, {
                     // @ts-ignore
                     stockComprometido: newComprometido
                 });
@@ -244,7 +233,7 @@ export const approveBudget = async (
                     referencia: `Reserva Presupuesto #${presupuesto.numero || presupuestoId}`,
                     fecha: now
                 };
-                transaction.set(movimientoRef, stripUndefined(movimiento));
+                safeTxSet(transaction, movimientoRef, movimiento);
             }
 
             // --- Update Quote (Final) ---
@@ -257,7 +246,7 @@ export const approveBudget = async (
                 saldoPendiente: presupuesto.total || 0
             };
 
-            transaction.update(presupuestoRef, stripUndefined(quoteUpdates));
+            safeTxUpdate(transaction, presupuestoRef, quoteUpdates);
         });
 
         console.log("Presupuesto aprobado, Cliente y Tracking actualizados.");
@@ -314,7 +303,7 @@ export const registerPayment = async (
                 updates.estado = 'in_progress'; // Primer pago activa "en progreso"
             }
 
-            transaction.update(presupuestoRef, updates);
+            safeTxUpdate(transaction, presupuestoRef, updates);
         });
 
     } catch (error) {

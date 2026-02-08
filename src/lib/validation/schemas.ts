@@ -2,11 +2,13 @@ import { z } from "zod";
 
 // --- CLIENT SCHEMA ---
 export const ClientSchema = z.object({
+    id: z.string().optional(),
     name: z.string().min(1, "El nombre del cliente es requerido"),
-    lines: z.array(z.string().min(1, "La línea de dirección no puede estar vacía"))
-        .min(1, "Debe ingresar al menos una línea de dirección"),
+    lines: z.array(z.string()).optional().default([]),
     phone: z.string().optional(),
     email: z.string().email("Email inválido").optional().or(z.literal("")),
+    cuit: z.string().optional().refine(val => !val || /^\d{11}$/.test(val), "CUIT debe tener 11 dígitos"),
+    frecuente: z.boolean().optional().default(false),
 });
 
 // --- ITEMS SCHEMA ---

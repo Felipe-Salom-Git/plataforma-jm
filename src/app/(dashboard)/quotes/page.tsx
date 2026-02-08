@@ -15,6 +15,7 @@ import {
     TableHeader,
     TableRow
 } from '@/components/ui/table';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -23,8 +24,9 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { MoreHorizontal, FileText, CheckCircle, Eye, Pencil } from 'lucide-react';
+import { MoreHorizontal, FileText, CheckCircle, Eye, Pencil, Trash2 } from 'lucide-react';
 import { PdfPreviewModal } from '@/components/quotes/PdfPreviewModal';
+import { ConfirmDialog } from '@/components/modals/ConfirmDialog';
 import { approveBudget } from '@/lib/logic/budget-actions';
 import { ProviderProfileService } from '@/lib/services/providerProfile';
 
@@ -84,7 +86,7 @@ export default function QuotesPage() {
         try {
             // 1. Fetch Full Quote Data
             const fullBudget = await QuotesService.getById(budget.id);
-            
+
             // 2. Fetch Provider Profile
             const profile = await ProviderProfileService.getProfile();
 
@@ -112,6 +114,30 @@ export default function QuotesPage() {
         }
     };
 
+    // --- Delete Logic ---
+    const [deleteId, setDeleteId] = useState<string | null>(null);
+    const [deleting, setDeleting] = useState(false);
+
+    const handleDeleteClick = (budget: Presupuesto) => {
+        setDeleteId(budget.id);
+    };
+
+    const confirmDelete = async () => {
+        if (!deleteId || !tenantId) return;
+        setDeleting(true);
+        try {
+            await QuotesService.delete(deleteId);
+            setDeleteId(null);
+            await loadQuotes(); // Refresh list
+            // toast.success("Presupuesto eliminado"); // Add toast if available
+        } catch (error) {
+            console.error(error);
+            alert("No se pudo eliminar el presupuesto");
+        } finally {
+            setDeleting(false);
+        }
+    };
+
     if (!isAuthenticated) return <div>Acceso denegado. Inicia sesión.</div>;
 
     return (
@@ -129,88 +155,86 @@ export default function QuotesPage() {
             {loading ? (
                 <div className="flex justify-center py-10"><Loader2 className="animate-spin" /></div>
             ) : (
-                <div className="bg-white rounded-md border">
+                <div className="rounded-md border bg-card">
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead>Número</TableHead>
-                                <TableHead>Fecha</TableHead>
-                                <TableHead>Obra / Título</TableHead>
+                                <TableHead className="w-[100px]">Fecha</TableHead>
+                                <TableHead>Título</TableHead>
                                 <TableHead>Cliente</TableHead>
-                                <TableHead>Total</TableHead>
                                 <TableHead>Estado</TableHead>
-                                <TableHead className="text-right">Acciones</TableHead>
+                                <TableHead className="text-right">Total</TableHead>
+                                <TableHead className="w-[70px]"></TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {quotes.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                                    <TableCell colSpan={6} className="h-24 text-center">
                                         No hay presupuestos registrados.
                                     </TableCell>
                                 </TableRow>
                             ) : (
                                 quotes.map((q) => (
-                                    <TableRow key={q.id}>
-                                        <TableCell className="font-medium">{q.numero || "—"}</TableCell>
-                                        <TableCell>{q.createdAt ? new Date(q.createdAt).toLocaleDateString() : '-'}</TableCell>
-                                        <TableCell>{q.titulo}</TableCell>
-                                        <TableCell>
-                                            <a href={`/quotes/${q.id}`} className="hover:underline text-primary font-medium">
-                                                {q.clienteSnapshot?.nombre || "Cliente"}
-                                            </a>
+                                    <TableRow key={q.id} className="hover:bg-muted/50">
+                                        <TableCell className="font-medium">
+                                            {q.createdAt ? new Date(q.createdAt).toLocaleDateString() : '-'}
                                         </TableCell>
-                                        <TableCell>${(q.total || 0).toLocaleString()}</TableCell>
                                         <TableCell>
-                                            <Badge variant="outline" className={
-                                                q.estado === 'approved' ? 'bg-green-100 text-green-800 border-green-200 hover:bg-green-100' :
-                                                q.estado === 'pending' ? 'bg-yellow-100 text-yellow-900 border-yellow-200 hover:bg-yellow-100' :
-                                                'bg-slate-100 text-slate-800 border-slate-200 hover:bg-slate-100'
+                                            <div className="flex flex-col">
+                                                <span className="font-medium">{q.titulo || "Sin título"}</span>
+                                                <span className="text-xs text-muted-foreground">{q.numero}</span>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell>{q.clienteSnapshot?.nombre || "Cliente desconocido"}</TableCell>
+                                        <TableCell>
+                                            <Badge variant={
+                                                q.estado === 'approved' ? 'default' :
+                                                    q.estado === 'pending' ? 'secondary' : 'outline'
+                                            } className={
+                                                q.estado === 'approved' ? 'bg-green-100 text-green-700 hover:bg-green-200 border-0' :
+                                                    q.estado === 'pending' ? 'bg-amber-100 text-amber-800 hover:bg-amber-200 border-0' :
+                                                        'text-muted-foreground'
                                             }>
-                                                {q.estado === 'draft' ? 'Borrador' :
-                                                    q.estado === 'approved' ? 'Aprobado' :
-                                                        q.estado === 'pending' ? 'Pendiente' : q.estado}
+                                                {q.estado === 'approved' ? 'Aprobado' :
+                                                    q.estado === 'pending' ? 'Pendiente' : 'Borrador'}
                                             </Badge>
                                         </TableCell>
                                         <TableCell className="text-right">
-                                            <div className="flex justify-end items-center gap-2">
-                                                {/* Quick PDF Action */}
-                                                <Button 
-                                                    variant="ghost" 
-                                                    size="icon" 
-                                                    onClick={() => handlePreviewPdf(q)} 
-                                                    disabled={!!generatingPdf}
-                                                    className="bg-white text-black border border-gray-300 hover:bg-gray-50 h-8 w-8"
-                                                >
-                                                    {generatingPdf === q.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4 text-slate-700" />}
-                                                </Button>
-
+                                            ${(q.total || 0).toLocaleString()}
+                                        </TableCell>
+                                        <TableCell>
+                                            <div className="flex items-center justify-end gap-2">
+                                                {generatingPdf === q.id && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
-                                                        <Button variant="ghost" size="icon" className="bg-white text-black border border-gray-300 hover:bg-gray-50 h-8 w-8">
-                                                            <MoreHorizontal className="h-4 w-4 text-slate-700" />
+                                                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                                                            <MoreHorizontal className="h-4 w-4" />
                                                         </Button>
                                                     </DropdownMenuTrigger>
-                                                    <DropdownMenuContent align="end" className="bg-white text-black border border-gray-200">
+                                                    <DropdownMenuContent align="end">
                                                         <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                                                        <DropdownMenuItem onClick={() => window.location.href = `/quotes/${q.id}`} className="focus:bg-gray-100 focus:text-black cursor-pointer">
-                                                            <Eye className="mr-2 h-4 w-4" /> Ver Detalle
+                                                        <DropdownMenuItem onClick={() => window.location.href = `/quotes/${q.id}`}>
+                                                            <Eye className="mr-2 h-4 w-4" /> Ver detalle
                                                         </DropdownMenuItem>
-                                                        <DropdownMenuItem onClick={() => window.location.href = `/quotes/${q.id}/edit`} className="focus:bg-gray-100 focus:text-black cursor-pointer">
+                                                        <DropdownMenuItem onClick={() => window.location.href = `/quotes/${q.id}/edit`}>
                                                             <Pencil className="mr-2 h-4 w-4" /> Editar
                                                         </DropdownMenuItem>
-                                                        <DropdownMenuItem onClick={() => handlePreviewPdf(q)} className="focus:bg-gray-100 focus:text-black cursor-pointer">
-                                                            <FileText className="mr-2 h-4 w-4" /> Previsualizar PDF
+                                                        <DropdownMenuItem onClick={() => handlePreviewPdf(q)}>
+                                                            <FileText className="mr-2 h-4 w-4" /> PDF
                                                         </DropdownMenuItem>
-
                                                         {(q.estado === 'draft' || q.estado === 'pending') && (
                                                             <>
-                                                                <DropdownMenuSeparator className="bg-gray-200" />
-                                                                <DropdownMenuItem onClick={() => handleApprove(q)} className="text-green-600 focus:text-green-700 focus:bg-green-50 cursor-pointer">
+                                                                <DropdownMenuSeparator />
+                                                                <DropdownMenuItem onClick={() => handleApprove(q)} className="text-green-600 focus:text-green-700 focus:bg-green-50">
                                                                     <CheckCircle className="mr-2 h-4 w-4" /> Aprobar
                                                                 </DropdownMenuItem>
                                                             </>
                                                         )}
+                                                        <DropdownMenuSeparator />
+                                                        <DropdownMenuItem onClick={() => handleDeleteClick(q)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
+                                                            <Trash2 className="mr-2 h-4 w-4" /> Eliminar
+                                                        </DropdownMenuItem>
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
                                             </div>
@@ -228,6 +252,15 @@ export default function QuotesPage() {
                 onClose={() => setPreviewOpen(false)}
                 data={previewData}
                 fileName={previewFileName}
+            />
+
+            <ConfirmDialog
+                open={!!deleteId}
+                onOpenChange={(open) => !open && setDeleteId(null)}
+                onConfirm={confirmDelete}
+                title="¿Eliminar presupuesto?"
+                description="Esta acción eliminará el presupuesto permanentemente."
+                loading={deleting}
             />
         </div>
     );

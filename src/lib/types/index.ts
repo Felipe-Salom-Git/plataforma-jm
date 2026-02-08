@@ -17,9 +17,14 @@ export interface Cliente {
   telefono?: string;
   email?: string;
   direccion?: string;
-  cuit?: string;
+  cuit?: string; // New
   createdAt: number;
   updatedAt: number;
+
+  // Client Features
+  frecuente?: boolean; // New
+  lastUsedAt?: number; // New
+
   // Tracking Info
   lastQuoteId?: string;
   lastQuoteNumber?: string;
@@ -158,6 +163,8 @@ export interface Tracking extends EntidadBase {
 
   clientId: string;
   clientSnapshot: ClienteSnapshot;
+
+  quoteSnapshot: Presupuesto; // Copia completa para independencia
 
   // Execution
   tasks: TrackingTask[];
