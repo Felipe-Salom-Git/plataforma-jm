@@ -6,8 +6,8 @@ import {
     serverTimestamp,
     doc,
     getDoc,
-    deleteDoc, // Added
-    where
+    where,
+    updateDoc
 } from "firebase/firestore";
 import { getTenantCollection, getTenantDoc, TENANT_ID } from "../firebase/firestore";
 import { QuoteFormValues } from "../validation/schemas";
@@ -88,37 +88,58 @@ export const QuotesService = {
 
     delete: async (id: string) => {
         const docRef = getTenantDoc("quotes", id);
-        await deleteDoc(docRef);
+        // Soft delete
+        await safeUpdateDoc(docRef, {
+            deletedAt: Date.now(),
+            updatedAt: Date.now()
+        });
+    },
+
+    restore: async (id: string) => {
+        const docRef = getTenantDoc("quotes", id);
+        await safeUpdateDoc(docRef, {
+            deletedAt: null,
+            updatedAt: Date.now()
+        });
+    },
+
+    listDeleted: async () => {
+        const colRef = getTenantCollection("quotes");
+        const q = query(colRef, where("deletedAt", ">", 0), orderBy("deletedAt", "desc"), limit(50));
+        const snap = await getDocs(q);
+        return snap.docs.map(d => ({ id: d.id, ...d.data() }));
     },
 
     // Listing methods retained/updated 
     listByStatus: async (status?: string) => {
         const colRef = getTenantCollection("quotes");
-        let q = query(colRef, orderBy("createdAt", "desc"), limit(50));
+        let q = query(colRef, orderBy("createdAt", "desc"), limit(100));
         if (status) {
-            q = query(colRef, where("status", "==", status), orderBy("createdAt", "desc"), limit(50));
+            q = query(colRef, where("status", "==", status), orderBy("createdAt", "desc"), limit(100));
         }
         const snap = await getDocs(q);
-        return snap.docs.map(d => {
-            const data = d.data();
-            return {
-                id: d.id,
-                ...data,
-                // Normalized fields for list view
-                createdAt: data.createdAt?.toMillis ? data.createdAt.toMillis() : (typeof data.createdAt === 'number' ? data.createdAt : Date.now()),
-                updatedAt: data.updatedAt?.toMillis ? data.updatedAt.toMillis() : (typeof data.updatedAt === 'number' ? data.updatedAt : Date.now()),
-                clienteSnapshot: {
-                    nombre: data.clienteSnapshot?.nombre || data.client?.name || "Cliente",
-                    // Other fields might not be needed for list but good for consistency
-                    direccion: data.clienteSnapshot?.direccion || "",
-                    email: data.clienteSnapshot?.email || "",
-                    telefono: data.clienteSnapshot?.telefono || ""
-                },
-                estado: data.estado || data.status || 'draft',
-                total: data.total || 0,
-                titulo: data.titulo || data.title || "Sin Título"
-            }
-        });
+        return snap.docs
+            .map(d => {
+                const data = d.data();
+                return {
+                    id: d.id,
+                    ...data,
+                    // Normalized fields for list view
+                    createdAt: data.createdAt?.toMillis ? data.createdAt.toMillis() : (typeof data.createdAt === 'number' ? data.createdAt : Date.now()),
+                    updatedAt: data.updatedAt?.toMillis ? data.updatedAt.toMillis() : (typeof data.updatedAt === 'number' ? data.updatedAt : Date.now()),
+                    clienteSnapshot: {
+                        nombre: data.clienteSnapshot?.nombre || data.client?.name || "Cliente",
+                        // Other fields might not be needed for list but good for consistency
+                        direccion: data.clienteSnapshot?.direccion || "",
+                        email: data.clienteSnapshot?.email || "",
+                        telefono: data.clienteSnapshot?.telefono || ""
+                    },
+                    estado: data.estado || data.status || 'draft',
+                    total: data.total || 0,
+                    titulo: data.titulo || data.title || "Sin Título"
+                }
+            })
+            .filter((d: any) => !d.deletedAt); // Client-side filter for soft delete
     },
 
     // Helper to get raw data for edit form

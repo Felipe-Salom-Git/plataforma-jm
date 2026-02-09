@@ -7,10 +7,12 @@ export interface EntidadBase {
   createdAt: number; // Timestamp
   updatedAt: number;
   ownerId: string; // ID del usuario/empresa (Multi-tenancy)
+  deletedAt?: number | null;
+  deletedBy?: string;
 }
 
 // --- Cliente ---
-export interface Cliente {
+export interface Cliente extends EntidadBase {
   id: string;
   ownerId: string;
   nombre: string;

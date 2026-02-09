@@ -7,7 +7,8 @@ import {
     where,
     orderBy,
     arrayUnion,
-    arrayRemove
+    arrayRemove,
+    limit
 } from "firebase/firestore";
 import { getTenantDoc, getTenantCollection } from "../firebase/firestore";
 import { Tracking, TrackingTask, TrackingMaterial, DailyLog, Pago } from "../types";
@@ -39,17 +40,19 @@ export const TrackingsService = {
             orderBy("createdAt", "desc")
         );
         const snapshot = await getDocs(q);
-        return snapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-                id: doc.id,
-                ...data,
-                tasks: data.tasks || [],
-                materials: data.materials || [],
-                dailyLogs: data.dailyLogs || [],
-                pagos: data.pagos || []
-            } as Tracking;
-        });
+        return snapshot.docs
+            .map(doc => {
+                const data = doc.data();
+                return {
+                    id: doc.id,
+                    ...data,
+                    tasks: data.tasks || [],
+                    materials: data.materials || [],
+                    dailyLogs: data.dailyLogs || [],
+                    pagos: data.pagos || []
+                } as Tracking;
+            })
+            .filter(t => !t.deletedAt);
     },
 
     update: async (tenantId: string, id: string, data: Partial<Tracking>) => {
@@ -59,7 +62,25 @@ export const TrackingsService = {
 
     delete: async (tenantId: string, id: string) => {
         const docRef = getTenantDoc("trackings", id);
-        await deleteDoc(docRef);
+        await safeUpdateDoc(docRef, {
+            deletedAt: Date.now(),
+            updatedAt: Date.now()
+        });
+    },
+
+    restore: async (tenantId: string, id: string) => {
+        const docRef = getTenantDoc("trackings", id);
+        await safeUpdateDoc(docRef, {
+            deletedAt: null,
+            updatedAt: Date.now()
+        });
+    },
+
+    listDeleted: async (tenantId: string) => {
+        const colRef = getTenantCollection("trackings");
+        const q = query(colRef, where("deletedAt", ">", 0), orderBy("deletedAt", "desc"), limit(50));
+        const snap = await getDocs(q);
+        return snap.docs.map(d => ({ id: d.id, ...d.data() } as Tracking));
     },
 
     // --- Tasks ---

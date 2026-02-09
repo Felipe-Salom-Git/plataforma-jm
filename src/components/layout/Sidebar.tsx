@@ -7,9 +7,9 @@ import {
   LayoutDashboard,
   FileText,
   Users,
-  Package,
   Settings,
-  LogOut
+  LogOut,
+  Trash2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { auth } from "@/lib/firebase/auth";
@@ -32,9 +32,9 @@ const navItems = [
     icon: Users,
   },
   {
-    title: "Materiales",
-    href: "/materiales",
-    icon: Package,
+    title: "Papelera",
+    href: "/papelera",
+    icon: Trash2,
   },
   {
     title: "Configuración",

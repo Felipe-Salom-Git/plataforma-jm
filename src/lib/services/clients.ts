@@ -4,7 +4,9 @@ import {
     getDoc,
     query,
     orderBy,
-    limit
+    limit,
+    updateDoc,
+    where
 } from "firebase/firestore";
 import { getTenantCollection, getTenantDoc } from "../firebase/firestore";
 import type { Cliente } from "../types";
@@ -56,7 +58,9 @@ export const ClientsService = {
 
         const q = query(colRef, orderBy("nombre"), limit(100)); // Limit for safety
         const snapshot = await getDocs(q);
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Cliente));
+        return snapshot.docs
+            .map(doc => ({ id: doc.id, ...doc.data() } as Cliente))
+            .filter(c => !c.deletedAt);
     },
 
     // Fuzzy search client
@@ -78,7 +82,7 @@ export const ClientsService = {
             c.nombre.toLowerCase().includes(lower) ||
             c.email?.toLowerCase().includes(lower) ||
             c.telefono?.includes(search)
-        );
+        ).filter((c: Cliente) => !c.deletedAt);
     },
 
     getById: async (tenantId: string, id: string): Promise<Cliente | null> => {
@@ -90,6 +94,24 @@ export const ClientsService = {
 
     delete: async (tenantId: string, id: string) => {
         const docRef = getTenantDoc("clientes", id);
-        await deleteDoc(docRef);
+        await safeUpdateDoc(docRef, {
+            deletedAt: Date.now(),
+            updatedAt: Date.now()
+        });
+    },
+
+    restore: async (tenantId: string, id: string) => {
+        const docRef = getTenantDoc("clientes", id);
+        await safeUpdateDoc(docRef, {
+            deletedAt: null,
+            updatedAt: Date.now()
+        });
+    },
+
+    listDeleted: async (tenantId: string) => {
+        const colRef = getTenantCollection("clientes");
+        const q = query(colRef, where("deletedAt", ">", 0), orderBy("deletedAt", "desc"), limit(50));
+        const snap = await getDocs(q);
+        return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Cliente));
     }
 };
