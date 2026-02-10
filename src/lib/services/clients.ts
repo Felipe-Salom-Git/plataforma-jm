@@ -113,5 +113,17 @@ export const ClientsService = {
         const q = query(colRef, where("deletedAt", ">", 0), orderBy("deletedAt", "desc"), limit(50));
         const snap = await getDocs(q);
         return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Cliente));
+    },
+
+    deletePermanent: async (tenantId: string, id: string) => {
+        const docRef = getTenantDoc("clientes", id);
+        await deleteDoc(docRef);
+    },
+
+    getDeletedIds: async (tenantId: string) => {
+        const colRef = getTenantCollection("clientes");
+        const q = query(colRef, where("deletedAt", ">", 0), limit(100));
+        const snap = await getDocs(q);
+        return snap.docs.map(d => d.id);
     }
 };

@@ -39,13 +39,6 @@ export default function EditQuotePage() {
 
     return (
         <div className="container mx-auto py-6">
-            <div className="mb-6 flex items-center gap-4">
-                <Button variant="ghost" size="icon" onClick={() => router.back()}>
-                    <ArrowLeft className="h-5 w-5" />
-                </Button>
-                <h1 className="text-2xl font-bold">Editar Presupuesto #{quote.numero || "S/N"}</h1>
-            </div>
-
             <QuoteForm initialData={quote} quoteId={quote.id} />
         </div>
     );

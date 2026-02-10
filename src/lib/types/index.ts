@@ -65,6 +65,12 @@ export interface ItemPresupuesto {
   total: number; // Calculado
   totalTexto?: string; // Alternativa texto
   cantidadTexto?: string; // Alternativa texto
+
+  // Execution State (for Extras)
+  completed?: boolean;
+  status?: 'planned' | 'bought' | 'used';
+  subtasks?: TrackingSubtask[];
+  assignee?: string;
 }
 
 export interface ClienteSnapshot {
@@ -107,6 +113,7 @@ export interface Presupuesto extends EntidadBase {
   validezDias: number;
   observaciones?: string; // Added
   condicionesPago?: string;
+  internalNotesText?: string; // Internal notes content
 
   // Seguimiento (Post-aprobación)
   checklist: ChecklistItem[];
@@ -133,11 +140,26 @@ export interface Presupuesto extends EntidadBase {
 
 
 // --- Tracking ---
+export interface TrackingSubtask {
+  id: string;
+  text: string;
+  completed: boolean;
+  assignee?: string;
+  date?: number;
+}
+
 export interface TrackingTask {
   id: string;
   text: string;
   completed: boolean;
-  originalItemId?: string;
+  createdAt?: number; // Added
+  relatedItemId?: string; // New: Link to budget item
+  originalItemId?: string; // Deprecated but keeping for compatibility if used
+  priority?: 'low' | 'medium' | 'high';
+  plannedDate?: number;
+  deadline?: number;
+  assignee?: string;
+  subtasks?: TrackingSubtask[];
 }
 
 export type MaterialStatus = 'planned' | 'bought' | 'used';
@@ -158,6 +180,16 @@ export interface DailyLog {
   author?: string;
 }
 
+export interface PromesaPago {
+  id: string;
+  fecha: number;
+  monto: number;
+  nota?: string;
+  estado: 'pendiente' | 'cumplida' | 'vencida';
+}
+
+export type TrackingStatus = 'pending_start' | 'in_progress' | 'waiting_client' | 'ready_to_deliver' | 'delivered' | 'closed' | 'canceled';
+
 export interface Tracking extends EntidadBase {
   quoteId: string;
   quoteNumber: string;
@@ -169,8 +201,19 @@ export interface Tracking extends EntidadBase {
   quoteSnapshot: Presupuesto; // Copia completa para independencia
 
   // Execution
+  status: TrackingStatus;
+  dates?: {
+    startedAt?: number;
+    deliveredAt?: number;
+    closedAt?: number;
+    canceledAt?: number;
+  };
+
   tasks: TrackingTask[];
+  itemSchedule?: Record<string, { date: number; startTime?: string; endTime?: string; assignee?: string }>; // New: Item Planning
   materials: TrackingMaterial[];
+  checklist?: ChecklistItem[]; // New: Delivery Checklist
+
   schedule?: {
     startDate?: number;
     endDate?: number;
@@ -180,13 +223,25 @@ export interface Tracking extends EntidadBase {
   dailyLogs: DailyLog[];
 
   // Financials
+  extras: ItemPresupuesto[];
+  purchases: Compra[];
   pagos: Pago[];
+  paymentPromises: PromesaPago[];
   saldoPendiente: number;
-  total: number;
-
-  status: 'pending_start' | 'in_progress' | 'completed' | 'canceled';
+  total: number; // Updated Total (Original + Extras)
 
   presupuestoRef?: string;
+
+  internalNotes?: string;
+}
+
+
+
+export interface ExtraTemplate extends EntidadBase {
+  name: string;
+  description: string; // Desc of the item
+  unit: string;
+  price: number;
 }
 
 // --- Calendario ---
@@ -197,4 +252,28 @@ export interface EventoCalendario extends EntidadBase {
   fin: number;
   tipo: 'trabajo' | 'visita' | 'recordatorio';
   presupuestoId?: string; // Link opcional
+}
+
+// --- Administrativo / Gastos ---
+export interface TransaccionManual extends EntidadBase {
+  fecha: number;
+  tipo: 'ingreso' | 'gasto';
+  categoria: string;
+  descripcion: string;
+  monto: number;
+}
+
+export interface Compra {
+  id: string;
+  fecha: number;
+  monto: number;
+  proveedor: string;
+  nota?: string;
+}
+
+export interface Gasto extends EntidadBase {
+  fecha: number;
+  categoria: string;
+  descripcion: string;
+  monto: number;
 }

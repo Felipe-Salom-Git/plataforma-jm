@@ -9,12 +9,15 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Loader2, Plus, Search, Phone, Mail, MapPin, Activity, Trash2 } from 'lucide-react';
+import { Loader2, Plus, Search, Phone, Mail, MapPin, Activity, Trash2, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
 import { ConfirmDialog } from '@/components/modals/ConfirmDialog';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import { QuotesService } from '@/lib/services/quotes';
+import { TrackingsService } from '@/lib/services/trackings';
+import { toast } from 'sonner';
 
 const clientSchema = z.object({
   nombre: z.string().min(2, "Nombre requerido"),
@@ -72,6 +75,42 @@ export default function ClientsPage() {
   // --- Delete Logic ---
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [checking, setChecking] = useState(false);
+
+  // Function to handle the initial click on delete
+  const handleDeleteClick = async (e: React.MouseEvent, client: Cliente) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!tenantId) return;
+
+    setChecking(true);
+    // Visual feedback could be added here if needed, but we wanted to avoid opening dialog
+    // For now we just run the check. If slow, we might need a loading state on the specific button.
+
+    try {
+      // Parallel checks
+      const [hasQuotes, hasTrackings] = await Promise.all([
+        QuotesService.hasQuotes(tenantId, client.id, client.nombre),
+        TrackingsService.hasTrackings(tenantId, client.id)
+      ]);
+
+      if (hasQuotes || hasTrackings) {
+        toast.error("No se puede eliminar el cliente", {
+          description: "Tiene presupuestos o trackings asociados. Eliminá o reasigná esos registros primero."
+        });
+        setChecking(false);
+        return;
+      }
+
+      setDeleteId(client.id);
+    } catch (error) {
+      console.error("Error checking client associations:", error);
+      toast.error("Error al verificar datos del cliente");
+    } finally {
+      setChecking(false);
+    }
+  };
 
   const confirmDelete = async () => {
     if (!deleteId || !tenantId) return;
@@ -157,19 +196,16 @@ export default function ClientsPage() {
                 </CardContent>
               </Link>
 
-              {/* Delete Button - Absolute positioned */}
-              <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+              {/* Delete Button - Absolute positioned Bottom Right */}
+              <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                 <Button
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setDeleteId(client.id);
-                  }}
+                  onClick={(e) => handleDeleteClick(e, client)}
+                  disabled={checking}
                 >
-                  <Trash2 className="h-4 w-4" />
+                  {checking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                 </Button>
               </div>
             </Card>

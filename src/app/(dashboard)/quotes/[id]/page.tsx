@@ -121,7 +121,7 @@ export default function BudgetDetailPage() {
             {/* Actions Bar */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
                 <div className="flex items-center gap-4">
-                    <Button variant="ghost" size="icon" onClick={() => router.back()}>
+                    <Button variant="ghost" size="icon" onClick={() => router.push('/quotes')}>
                         <ArrowLeft className="h-5 w-5" />
                     </Button>
                     <div>

@@ -175,7 +175,7 @@ export default function QuoteForm({ initialData, quoteId }: QuoteFormProps) {
                 await QuotesService.updateQuote(quoteId, data);
             } else {
                 const res = await QuotesService.createQuote(data);
-                if (res.id) router.push(`/quotes/${res.id}`);
+                if (res.id) router.replace(`/quotes/${res.id}`);
                 return; // Redirecting
             }
             toast.success("Presupuesto guardado");
@@ -192,8 +192,8 @@ export default function QuoteForm({ initialData, quoteId }: QuoteFormProps) {
 
     return (
         <form onSubmit={form.handleSubmit(onSubmit, (errors) => {
-            console.error("Validation errors:", errors);
-            toast.error("Por favor revise los campos requeridos (ver consola)");
+            console.error("Validation errors full:", JSON.stringify(errors, null, 2));
+            toast.error("Por favor revise los campos requeridos.");
         })} className="min-h-screen bg-slate-50/50 pb-20">
             {/* STICKY HEADER */}
             <header className="sticky top-0 z-10 bg-white border-b px-6 py-4 flex items-center justify-between shadow-sm">
@@ -404,7 +404,7 @@ export default function QuoteForm({ initialData, quoteId }: QuoteFormProps) {
                                                         <Input
                                                             type="number" step="1" min="0"
                                                             {...form.register(`items.${index}.unitPrice`, { valueAsNumber: true, onChange: () => updateLineTotal(index) })}
-                                                            className="text-right pl-5 h-9"
+                                                            className="text-right pl-5 h-9 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                         />
                                                     </div>
                                                 </td>
@@ -491,11 +491,14 @@ export default function QuoteForm({ initialData, quoteId }: QuoteFormProps) {
                                                     />
                                                 </td>
                                                 <td className="px-4 py-3">
-                                                    <Input
-                                                        type="number" step="1" min="0"
-                                                        {...form.register(`materials.${index}.unitPrice`, { valueAsNumber: true, onChange: () => updateMatTotal(index) })}
-                                                        className="text-right h-9"
-                                                    />
+                                                    <div className="relative">
+                                                        <span className="absolute left-2 top-2.5 text-muted-foreground text-xs">$</span>
+                                                        <Input
+                                                            type="number" step="1" min="0"
+                                                            {...form.register(`materials.${index}.unitPrice`, { valueAsNumber: true, onChange: () => updateMatTotal(index) })}
+                                                            className="text-right pl-5 h-9 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                        />
+                                                    </div>
                                                 </td>
                                                 <td className="px-4 py-3 text-right font-medium text-foreground pt-4">
                                                     $ {(form.watch(`materials.${index}.total`) || 0).toLocaleString()}

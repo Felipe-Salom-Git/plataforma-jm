@@ -183,9 +183,13 @@ export const approveBudget = async (
                 pagos: [],
                 saldoPendiente: presupuesto.total || 0,
                 total: presupuesto.total || 0,
+                extras: [],
+                purchases: [],
+                paymentPromises: [],
 
                 status: 'pending_start',
-                presupuestoRef: presupuestoId
+                presupuestoRef: presupuestoId,
+                internalNotes: presupuesto.internalNotesText || ""
             };
 
             // Sanitize tracking data

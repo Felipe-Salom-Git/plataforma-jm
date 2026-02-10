@@ -177,8 +177,8 @@ export default function ClientDetailPage() {
                                                 </Badge>
                                             </div>
                                             <p className="text-sm text-muted-foreground line-clamp-2">
-                                                {/* Use quote snapshot items description or tasks summary */}
-                                                {tracking.quoteSnapshot?.items?.map(i => i.descripcion).slice(0, 3).join(", ") || "Sin detalles"}
+                                                {/* Display Internal Notes if available, otherwise fallback or empty message */}
+                                                {tracking.internalNotes || tracking.quoteSnapshot?.internalNotesText || "Sin notas internas"}
                                             </p>
                                         </div>
 

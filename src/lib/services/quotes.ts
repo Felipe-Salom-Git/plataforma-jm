@@ -7,7 +7,8 @@ import {
     doc,
     getDoc,
     where,
-    updateDoc
+    updateDoc,
+    deleteDoc
 } from "firebase/firestore";
 import { getTenantCollection, getTenantDoc, TENANT_ID } from "../firebase/firestore";
 import { QuoteFormValues } from "../validation/schemas";
@@ -110,6 +111,22 @@ export const QuotesService = {
         return snap.docs.map(d => ({ id: d.id, ...d.data() }));
     },
 
+    deletePermanent: async (id: string) => {
+        const docRef = getTenantDoc("quotes", id);
+        await deleteDoc(docRef);
+    },
+
+    // Fetch all deleted IDs for batch processing (chunks of 500 max usually but we'll paginate in UI if needed, 
+    // or just fetch all for now if volume is expect to be reasonable. 
+    // For safety, let's limit to 100 at a time for the 'empty trash' batch)
+    getDeletedIds: async () => {
+        const colRef = getTenantCollection("quotes");
+        // Note: retrieving docs just for IDs is the standard usage in client SDK
+        const q = query(colRef, where("deletedAt", ">", 0), limit(100));
+        const snap = await getDocs(q);
+        return snap.docs.map(d => d.id);
+    },
+
     // Listing methods retained/updated 
     listByStatus: async (status?: string) => {
         const colRef = getTenantCollection("quotes");
@@ -182,5 +199,23 @@ export const QuotesService = {
             descuentoGlobal: data.descuentoGlobal || 0
         } as any; // Cast to any effectively or import Presupuesto to cast properly. 
         // Ideally: return result as Presupuesto
+    }, // Added comma here to separate methods
+    // Check if client has associated quotes (active or deleted, but mainly active for blockage)
+    hasQuotes: async (tenantId: string, clientId: string, clientName?: string): Promise<boolean> => {
+        const colRef = getTenantCollection("quotes");
+
+        // 1. Check by client.id (most reliable)
+        const qId = query(colRef, where("client.id", "==", clientId), limit(1));
+        const snapId = await getDocs(qId);
+        if (!snapId.empty) return true;
+
+        // 2. Fallback: Check by name in snapshot if provided
+        if (clientName) {
+            const qName = query(colRef, where("clienteSnapshot.nombre", "==", clientName), limit(1));
+            const snapName = await getDocs(qName);
+            if (!snapName.empty) return true;
+        }
+
+        return false;
     }
 };

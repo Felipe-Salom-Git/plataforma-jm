@@ -23,11 +23,10 @@ export function removeUndefined(obj: any): any {
             .filter(v => v !== undefined)
             .map(v => removeUndefined(v));
     } else if (obj !== null && typeof obj === 'object') {
-        // Handle specialized objects like Date or Firestore Timestamp if needed
-        // But those are generally fine. 
-        // We only primarily care about plain objects.
-        // A simple check is constructor === Object, but that might fail for custom classes unless intended.
-        // For now, let's keep it simple recursive plain object check.
+        // Only recurse on plain objects to avoid mangling Date, Timestamp, FieldValue, etc.
+        if (obj.constructor !== Object) {
+            return obj;
+        }
 
         const newObj: any = {};
         Object.keys(obj).forEach((key) => {

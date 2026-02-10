@@ -9,7 +9,9 @@ import {
   Users,
   Settings,
   LogOut,
-  Trash2
+  Trash2,
+  Calendar,
+  Briefcase
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { auth } from "@/lib/firebase/auth";
@@ -25,6 +27,16 @@ const navItems = [
     title: "Presupuestos",
     href: "/quotes", // Canonical path
     icon: FileText,
+  },
+  {
+    title: "Calendario",
+    href: "/calendar",
+    icon: Calendar,
+  },
+  {
+    title: "Administrativo",
+    href: "/admin",
+    icon: Briefcase,
   },
   {
     title: "Clientes",

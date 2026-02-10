@@ -1,7 +1,0 @@
-'use client';
-
-import QuoteForm from "@/components/quotes/QuoteForm";
-
-export default function NewPresupuestoPage() {
-  return <QuoteForm />;
-}

@@ -3,9 +3,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Loader2, Plus, Pencil, Trash2, CheckCircle2, XCircle, Star, UserCircle2, PenTool } from 'lucide-react';
+import { Loader2, Plus, Pencil, Trash2, CheckCircle2, XCircle, Star, UserCircle2, PenTool, FileText } from 'lucide-react';
 import { TemplatesService } from '@/lib/services/templates';
 import { ProviderProfileService } from '@/lib/services/providerProfile';
+import { SettingsService } from '@/lib/services/settings';
+import { useTenant } from '@/lib/hooks/useTenant';
 import { TemplateSchema, TemplateValues, ProviderProfileSchema, ProviderProfileValues } from '@/lib/validation/schemas';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -198,11 +200,26 @@ export default function ConfigPage() {
 
     const filteredTemplates = templates.filter(t => t.type === currentTab);
 
+    // --- STAFF HANDLERS ---
+    const [staff, setStaff] = useState<string[]>([]);
+    const [newStaff, setNewStaff] = useState("");
+    const { tenantId } = { tenantId: 'demotenant' }; // Placeholder, use useTenant hook in real app
+
+    const loadStaff = async () => {
+        // Assuming we can get tenantId from context or similar if needed, 
+        // but for now relying on service handling logic or passing dummy if needed.
+        // Actually SettingsService needs tenantId. 
+        // We should move this logical block to useTenant hook if available or assume global.
+        // Let's assume we can import useTenant.
+    };
+
+    // Quick fix: Add useTenant hook import and usage at top of file
+
     return (
         <div className="p-8 space-y-6">
             <div className="flex justify-between items-center">
                 <h1 className="text-2xl font-bold">Configuración</h1>
-                {currentTab !== 'profile' && (
+                {currentTab !== 'profile' && currentTab !== 'staff' && (
                     <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                         <DialogTrigger asChild>
                             <Button onClick={() => { setEditingId(null); form.reset({ active: true, isDefault: false, type: currentTab as any, title: '', content: '' }); }}>
@@ -227,8 +244,8 @@ export default function ConfigPage() {
                                             <SelectItem value="conditions">Condiciones Generales</SelectItem>
                                             <SelectItem value="paymentConditions">Condiciones de Pago</SelectItem>
                                             <SelectItem value="paymentMethod">Método de Pago</SelectItem>
-                                            <SelectItem value="notes">Notas Internas</SelectItem>
-                                            <SelectItem value="internalNotes">Notas Internas (Presupuesto)</SelectItem>
+                                            <SelectItem value="notes">Notas para el cliente</SelectItem>
+                                            <SelectItem value="internalNotes">Notas Internas</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -256,12 +273,13 @@ export default function ConfigPage() {
             <Tabs defaultValue="profile" value={currentTab} onValueChange={setCurrentTab} className="w-full">
                 <TabsList className="mb-4 flex flex-wrap h-auto">
                     <TabsTrigger value="profile" className="font-bold"><UserCircle2 className="h-4 w-4 mr-2" /> Perfil del Prestador</TabsTrigger>
+                    <TabsTrigger value="staff">Equipo / Staff</TabsTrigger>
                     <TabsTrigger value="clarifications">Aclaraciones</TabsTrigger>
                     <TabsTrigger value="conditions">Condiciones</TabsTrigger>
                     <TabsTrigger value="paymentConditions">Cond. Pago</TabsTrigger>
                     <TabsTrigger value="paymentMethod">Mét. Pago</TabsTrigger>
-                    <TabsTrigger value="notes">Notas Internas</TabsTrigger>
-                    <TabsTrigger value="internalNotes">Notas Int. (Presup.)</TabsTrigger>
+                    <TabsTrigger value="notes">Notas Cliente</TabsTrigger>
+                    <TabsTrigger value="internalNotes">Notas Internas</TabsTrigger>
                 </TabsList>
 
                 {/* --- PROFILE CONTENT --- */}
@@ -340,50 +358,143 @@ export default function ConfigPage() {
                     </div>
                 </TabsContent>
 
+                {/* --- STAFF CONTENT --- */}
+                <TabsContent value="staff">
+                    <StaffManager />
+                </TabsContent>
+
                 {/* --- TEMPLATES CONTENT (Existing loop) --- */}
                 {loading ? <Loader2 className="animate-spin mx-auto mt-8" /> : (
-                    currentTab !== 'profile' && (
-                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                            {filteredTemplates.map(tmpl => (
-                                <Card key={tmpl.id} className={!tmpl.active ? "opacity-60 border-dashed" : ""}>
-                                    <CardHeader className="py-4 flex flex-row justify-between items-start rounded-t-lg bg-transparent pb-2">
-                                        <div>
-                                            <div className="font-semibold text-sm flex items-center gap-2">
-                                                {tmpl.title}
-                                                {tmpl.isDefault && (
-                                                    <Badge variant="secondary" className="bg-amber-100 text-amber-800 hover:bg-amber-200 border-0 gap-1 px-1.5 h-5">
-                                                        <Star className="h-3 w-3 fill-amber-500 text-amber-500" /> Default
-                                                    </Badge>
-                                                )}
-                                                {!tmpl.active && <Badge variant="outline" className="text-muted-foreground border-muted-foreground/30 h-5">Inactiva</Badge>}
+                    currentTab !== 'profile' && currentTab !== 'staff' && (
+                        <div>
+                            {currentTab === 'notes' && (
+                                <div className="mb-4 p-3 bg-blue-50 text-blue-700 rounded-md text-sm border border-blue-100 flex items-center gap-2">
+                                    <FileText className="h-4 w-4" />
+                                    <strong>Notas para el cliente:</strong> Se muestran en el presupuesto que recibe el cliente.
+                                </div>
+                            )}
+                            {currentTab === 'internalNotes' && (
+                                <div className="mb-4 p-3 bg-amber-50 text-amber-700 rounded-md text-sm border border-amber-100 flex items-center gap-2">
+                                    <CheckCircle2 className="h-4 w-4" />
+                                    <strong>Notas internas:</strong> Solo uso interno. Se muestran en el tracking / seguimiento.
+                                </div>
+                            )}
+                            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                                {filteredTemplates.map(tmpl => (
+                                    <Card key={tmpl.id} className={!tmpl.active ? "opacity-60 border-dashed" : ""}>
+                                        <CardHeader className="py-4 flex flex-row justify-between items-start rounded-t-lg bg-transparent pb-2">
+                                            <div>
+                                                <div className="font-semibold text-sm flex items-center gap-2">
+                                                    {tmpl.title}
+                                                    {tmpl.isDefault && (
+                                                        <Badge variant="secondary" className="bg-amber-100 text-amber-800 hover:bg-amber-200 border-0 gap-1 px-1.5 h-5">
+                                                            <Star className="h-3 w-3 fill-amber-500 text-amber-500" /> Default
+                                                        </Badge>
+                                                    )}
+                                                    {!tmpl.active && <Badge variant="outline" className="text-muted-foreground border-muted-foreground/30 h-5">Inactiva</Badge>}
+                                                </div>
                                             </div>
-                                        </div>
-                                        <div className="flex gap-1">
-                                            <Button
-                                                size="icon" variant="ghost" className="h-7 w-7 text-amber-500 hover:text-amber-600 hover:bg-amber-50"
-                                                title="Hacer Default"
-                                                onClick={() => handleSetDefault(tmpl)}
-                                                disabled={!tmpl.active || tmpl.isDefault}
-                                            >
-                                                <Star className={`h-4 w-4 ${tmpl.isDefault ? "fill-current" : ""}`} />
-                                            </Button>
-                                            <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground" onClick={() => handleEdit(tmpl)}><Pencil className="h-3.5 w-3.5" /></Button>
-                                            <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:bg-destructive/10" onClick={() => handleDelete(tmpl.id!)}><Trash2 className="h-3.5 w-3.5" /></Button>
-                                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleToggleActive(tmpl)} title={tmpl.active ? "Desactivar" : "Activar"}>
-                                                {tmpl.active ? <XCircle className="h-3.5 w-3.5 text-muted-foreground" /> : <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />}
-                                            </Button>
-                                        </div>
-                                    </CardHeader>
-                                    <CardContent className="pt-2 text-sm text-muted-foreground whitespace-pre-wrap h-32 overflow-hidden text-ellipsis relative">
-                                        {tmpl.content}
-                                    </CardContent>
-                                </Card>
-                            ))}
-                            {filteredTemplates.length === 0 && <div className="col-span-3 text-center py-10 text-muted-foreground border-2 border-dashed border-muted rounded-lg bg-muted/10">No hay plantillas de este tipo.</div>}
+                                            <div className="flex gap-1">
+                                                <Button
+                                                    size="icon" variant="ghost" className="h-7 w-7 text-amber-500 hover:text-amber-600 hover:bg-amber-50"
+                                                    title="Hacer Default"
+                                                    onClick={() => handleSetDefault(tmpl)}
+                                                    disabled={!tmpl.active || tmpl.isDefault}
+                                                >
+                                                    <Star className={`h-4 w-4 ${tmpl.isDefault ? "fill-current" : ""}`} />
+                                                </Button>
+                                                <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground" onClick={() => handleEdit(tmpl)}><Pencil className="h-3.5 w-3.5" /></Button>
+                                                <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:bg-destructive/10" onClick={() => handleDelete(tmpl.id!)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                                                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleToggleActive(tmpl)} title={tmpl.active ? "Desactivar" : "Activar"}>
+                                                    {tmpl.active ? <XCircle className="h-3.5 w-3.5 text-muted-foreground" /> : <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />}
+                                                </Button>
+                                            </div>
+                                        </CardHeader>
+                                        <CardContent className="pt-2 text-sm text-muted-foreground whitespace-pre-wrap h-32 overflow-hidden text-ellipsis relative">
+                                            {tmpl.content}
+                                        </CardContent>
+                                    </Card>
+                                ))}
+                                {filteredTemplates.length === 0 && <div className="col-span-3 text-center py-10 text-muted-foreground border-2 border-dashed border-muted rounded-lg bg-muted/10">No hay plantillas de este tipo.</div>}
+                            </div>
                         </div>
                     )
                 )}
             </Tabs>
         </div>
+    );
+}
+
+// --- SUBCOMPONENTS ---
+
+function StaffManager() {
+    const { tenantId } = useTenant();
+    const [staff, setStaff] = useState<string[]>([]);
+    const [newName, setNewName] = useState("");
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        if (tenantId) load();
+    }, [tenantId]);
+
+    const load = async () => {
+        setLoading(true);
+        try {
+            // Dynamic import to avoid circular dependencies if any, but regular import is fine
+            const settings = await SettingsService.getSettings(tenantId!);
+            setStaff(settings.staff || []);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const add = async () => {
+        if (!newName.trim() || !tenantId) return;
+        const updated = [...staff, newName.trim()];
+        setStaff(updated);
+        setNewName("");
+        await SettingsService.updateStaff(tenantId, updated);
+    };
+
+    const remove = async (name: string) => {
+        if (!tenantId || !confirm(`¿Eliminar a ${name}?`)) return;
+        const updated = staff.filter(s => s !== name);
+        setStaff(updated);
+        await SettingsService.updateStaff(tenantId, updated);
+    };
+
+    if (loading) return <Loader2 className="animate-spin" />;
+
+    return (
+        <Card className="max-w-xl">
+            <CardHeader>
+                <CardTitle>Equipo / Responsables</CardTitle>
+                <CardDescription>Lista de personas asignables a tareas.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                <div className="flex gap-2">
+                    <Input
+                        value={newName}
+                        onChange={e => setNewName(e.target.value)}
+                        placeholder="Nombre (ej: Juan Pérez)"
+                        onKeyDown={e => e.key === 'Enter' && add()}
+                    />
+                    <Button onClick={add}><Plus className="h-4 w-4 mr-2" /> Agregar</Button>
+                </div>
+                <div className="space-y-2">
+                    {staff.map((s, i) => (
+                        <div key={i} className="flex justify-between items-center p-2 border rounded hover:bg-slate-50">
+                            <span>{s}</span>
+                            <Button variant="ghost" size="sm" onClick={() => remove(s)}>
+                                <Trash2 className="h-4 w-4 text-red-500" />
+                            </Button>
+                        </div>
+                    ))}
+                    {staff.length === 0 && <p className="text-gray-500 italic text-sm">No hay personal cargado.</p>}
+                </div>
+            </CardContent>
+        </Card>
     );
 }

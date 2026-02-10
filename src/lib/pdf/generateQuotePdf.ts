@@ -303,15 +303,17 @@ export const generateQuotePdf = async (data: QuotePdfData): Promise<Uint8Array> 
         // Fixed widths for numeric cols
         const idxW = 30;
         const priceW = 80;
-        const qtyW = 60;
-        const totalW = 80; // slightly larger to fit total
+        const qtyW = 50;  // Reduced from 60
+        const unitW = 50; // New column
+        const totalW = 80;
 
         // Calculate bounds
         const cols = {
             idx: { left: tableX, right: tableX + idxW },
-            desc: { left: tableX + idxW, right: width - PAGE_MARGIN - priceW - qtyW - totalW },
-            price: { left: width - PAGE_MARGIN - priceW - qtyW - totalW, right: width - PAGE_MARGIN - qtyW - totalW },
-            qty: { left: width - PAGE_MARGIN - qtyW - totalW, right: width - PAGE_MARGIN - totalW },
+            desc: { left: tableX + idxW, right: width - PAGE_MARGIN - priceW - qtyW - unitW - totalW },
+            unit: { left: width - PAGE_MARGIN - priceW - qtyW - unitW - totalW, right: width - PAGE_MARGIN - priceW - qtyW - totalW },
+            qty: { left: width - PAGE_MARGIN - priceW - qtyW - totalW, right: width - PAGE_MARGIN - priceW - totalW },
+            price: { left: width - PAGE_MARGIN - priceW - totalW, right: width - PAGE_MARGIN - totalW },
             total: { left: width - PAGE_MARGIN - totalW, right: width - PAGE_MARGIN }
         };
 
@@ -329,8 +331,9 @@ export const generateQuotePdf = async (data: QuotePdfData): Promise<Uint8Array> 
             // "dibujar textos centrados o left dentro de cada COL.*"
             page.drawText('ÍTEM', { x: cols.idx.left + 5, y: txtY, size: 8, font: fontBold });
             page.drawText('TAREA / DESCRIPCIÓN', { x: cols.desc.left + 5, y: txtY, size: 8, font: fontBold });
-            page.drawText('PRECIO', { x: cols.price.left + 5, y: txtY, size: 8, font: fontBold });
+            page.drawText('UNIDAD', { x: cols.unit.left + 5, y: txtY, size: 8, font: fontBold });
             page.drawText('CANT', { x: cols.qty.left + 5, y: txtY, size: 8, font: fontBold });
+            page.drawText('PRECIO', { x: cols.price.left + 5, y: txtY, size: 8, font: fontBold });
             page.drawText('TOTAL', { x: cols.total.left + 5, y: txtY, size: 8, font: fontBold });
 
             // Vertical Separators (Header)
@@ -343,8 +346,9 @@ export const generateQuotePdf = async (data: QuotePdfData): Promise<Uint8Array> 
                 });
             };
             drawVertLine(cols.desc.left);
-            drawVertLine(cols.price.left);
+            drawVertLine(cols.unit.left);
             drawVertLine(cols.qty.left);
+            drawVertLine(cols.price.left);
             drawVertLine(cols.total.left);
             drawVertLine(cols.total.right);
 
@@ -404,14 +408,17 @@ export const generateQuotePdf = async (data: QuotePdfData): Promise<Uint8Array> 
 
             // Numbers
             const priceStr = formatCurrency(unitPrice, item.priceText);
-            const qtyStr = qty.toString();
-            // If qty is 0, show "—" optionally? User said: (si es 0 mostrar "0" o "—", pero que aparezca)
-            // Let's stick to safeNum returning number, toString gives "0".
+            const unitStr = item.unit ? item.unit : "";
+            const qtyStr = `${qty}`; // Just number
+
             const totalStr = formatCurrency(total, item.totalText);
 
             // Right Align with 8px padding from right edge of column
-            currentPage.drawText(priceStr, { x: cols.price.right - 8 - fontReg.widthOfTextAtSize(priceStr, 9), y: textY, size: 9, font: fontReg });
+            // Unit is centered or left? Text says "Mostrar el valor". Let's center it or left align. Left align + padding.
+            currentPage.drawText(unitStr, { x: cols.unit.left + 5, y: textY, size: 9, font: fontReg });
+
             currentPage.drawText(qtyStr, { x: cols.qty.right - 8 - fontReg.widthOfTextAtSize(qtyStr, 9), y: textY, size: 9, font: fontReg });
+            currentPage.drawText(priceStr, { x: cols.price.right - 8 - fontReg.widthOfTextAtSize(priceStr, 9), y: textY, size: 9, font: fontReg });
             currentPage.drawText(totalStr, { x: cols.total.right - 8 - fontReg.widthOfTextAtSize(totalStr, 9), y: textY, size: 9, font: fontReg });
 
             // Vertical Separators (Thin lines)
@@ -425,8 +432,9 @@ export const generateQuotePdf = async (data: QuotePdfData): Promise<Uint8Array> 
             };
 
             drawVertLine(cols.desc.left);
-            drawVertLine(cols.price.left);
+            drawVertLine(cols.unit.left);
             drawVertLine(cols.qty.left);
+            drawVertLine(cols.price.left);
             drawVertLine(cols.total.left);
             drawVertLine(cols.total.right);
 
@@ -457,14 +465,16 @@ export const generateQuotePdf = async (data: QuotePdfData): Promise<Uint8Array> 
         const tableW = width - 2 * PAGE_MARGIN;
         const idxW = 30;
         const priceW = 80;
-        const qtyW = 60;
+        const qtyW = 50;
+        const unitW = 50;
         const totalW = 80;
 
         const cols = {
             idx: { left: tableX, right: tableX + idxW },
-            desc: { left: tableX + idxW, right: width - PAGE_MARGIN - priceW - qtyW - totalW },
-            price: { left: width - PAGE_MARGIN - priceW - qtyW - totalW, right: width - PAGE_MARGIN - qtyW - totalW },
-            qty: { left: width - PAGE_MARGIN - qtyW - totalW, right: width - PAGE_MARGIN - totalW },
+            desc: { left: tableX + idxW, right: width - PAGE_MARGIN - priceW - qtyW - unitW - totalW },
+            unit: { left: width - PAGE_MARGIN - priceW - qtyW - unitW - totalW, right: width - PAGE_MARGIN - priceW - qtyW - totalW },
+            qty: { left: width - PAGE_MARGIN - priceW - qtyW - totalW, right: width - PAGE_MARGIN - priceW - totalW },
+            price: { left: width - PAGE_MARGIN - priceW - totalW, right: width - PAGE_MARGIN - totalW },
             total: { left: width - PAGE_MARGIN - totalW, right: width - PAGE_MARGIN }
         };
 
@@ -479,8 +489,9 @@ export const generateQuotePdf = async (data: QuotePdfData): Promise<Uint8Array> 
             const txtY = cursorY - 14;
             page.drawText('ÍTEM', { x: cols.idx.left + 5, y: txtY, size: 8, font: fontBold });
             page.drawText('MATERIAL', { x: cols.desc.left + 5, y: txtY, size: 8, font: fontBold });
-            page.drawText('PRECIO', { x: cols.price.left + 5, y: txtY, size: 8, font: fontBold });
+            page.drawText('UNIDAD', { x: cols.unit.left + 5, y: txtY, size: 8, font: fontBold });
             page.drawText('CANT', { x: cols.qty.left + 5, y: txtY, size: 8, font: fontBold });
+            page.drawText('PRECIO', { x: cols.price.left + 5, y: txtY, size: 8, font: fontBold });
             page.drawText('TOTAL', { x: cols.total.left + 5, y: txtY, size: 8, font: fontBold });
 
             // Vertical Separators (Header)
@@ -493,8 +504,9 @@ export const generateQuotePdf = async (data: QuotePdfData): Promise<Uint8Array> 
                 });
             };
             drawVertLine(cols.desc.left);
-            drawVertLine(cols.price.left);
+            drawVertLine(cols.unit.left);
             drawVertLine(cols.qty.left);
+            drawVertLine(cols.price.left);
             drawVertLine(cols.total.left);
             drawVertLine(cols.total.right);
 
@@ -516,6 +528,9 @@ export const generateQuotePdf = async (data: QuotePdfData): Promise<Uint8Array> 
 
             // Fix CANT: ensure qty is drawn even if 0
             const qty = safeNum((item as any).quantity ?? (item as any).cantidad ?? 0);
+
+            const unit = (item as any).unit || (item as any).unidad || "";
+            const qtyStr = `${qty}`;
 
             const unitPrice = safeNum((item as any).unitPrice ?? (item as any).precioUnitario ?? 0);
             const total = safeNum((item as any).total ?? (qty * unitPrice));
@@ -547,8 +562,9 @@ export const generateQuotePdf = async (data: QuotePdfData): Promise<Uint8Array> 
             });
 
             // Right Alignment Logic
+            currentPage.drawText(unit, { x: cols.unit.left + 5, y: textY, size: 9, font: fontReg });
+            currentPage.drawText(qtyStr, { x: cols.qty.right - 8 - fontReg.widthOfTextAtSize(qtyStr, 9), y: textY, size: 9, font: fontReg });
             currentPage.drawText(formatCurrency(unitPrice), { x: cols.price.right - 8 - fontReg.widthOfTextAtSize(formatCurrency(unitPrice), 9), y: textY, size: 9, font: fontReg });
-            currentPage.drawText(qty.toString(), { x: cols.qty.right - 8 - fontReg.widthOfTextAtSize(qty.toString(), 9), y: textY, size: 9, font: fontReg });
             currentPage.drawText(formatCurrency(total), { x: cols.total.right - 8 - fontReg.widthOfTextAtSize(formatCurrency(total), 9), y: textY, size: 9, font: fontReg });
 
             // Vertical Separators
@@ -562,8 +578,9 @@ export const generateQuotePdf = async (data: QuotePdfData): Promise<Uint8Array> 
             };
 
             drawVertLine(cols.desc.left);
-            drawVertLine(cols.price.left);
+            drawVertLine(cols.unit.left);
             drawVertLine(cols.qty.left);
+            drawVertLine(cols.price.left);
             drawVertLine(cols.total.left);
             drawVertLine(cols.total.right);
 

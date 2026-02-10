@@ -3,10 +3,6 @@
 import { useEffect, useState } from 'react';
 import { useTenant } from '@/lib/hooks/useTenant';
 import { DashboardService, DashboardStats } from '@/lib/services/dashboard';
-import { Calendar, dateFnsLocalizer } from 'react-big-calendar';
-import { format, parse, startOfWeek, getDay } from 'date-fns';
-import { es } from 'date-fns/locale';
-import 'react-big-calendar/lib/css/react-big-calendar.css';
 import {
   BarChart,
   Bar,
@@ -17,19 +13,8 @@ import {
   ResponsiveContainer
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, FileText, Clock, CheckCircle2, DollarSign } from 'lucide-react';
-
-// Calendar Localizer
-const locales = {
-  'es': es,
-};
-const localizer = dateFnsLocalizer({
-  format,
-  parse,
-  startOfWeek,
-  getDay,
-  locales,
-});
+import { Loader2, FileText, Clock, CheckCircle2, DollarSign, Calendar as CalendarIcon, ArrowRight } from 'lucide-react';
+import Link from 'next/link';
 
 export default function DashboardPage() {
   const { tenantId, isAuthenticated } = useTenant();
@@ -48,7 +33,12 @@ export default function DashboardPage() {
     try {
       const s = await DashboardService.getStats();
       const e = await DashboardService.getRecentEvents();
-      setStats(s);
+      // Filter for future events only? Or keep recent. Service says "getRecentEvents" but logic is "orderBy createdAt desc".
+      // The logic in service seems to be just fetching latest created budgets, mapped as events. 
+      // User requirement: "Próximos eventos (ej: hoy / próximos 7 días)". 
+      // The current service logic actually maps `start` to `createdAt` and `end` to `createdAt + validity`.
+      // So "events" are basically "Active Budgets".
+      // Let's filter in UI to show those that are not expired? Or just show the list as is for now.
       setEvents(e);
     } catch (error) {
       console.error("Error loading dashboard", error);
@@ -123,34 +113,8 @@ export default function DashboardPage() {
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
 
-        {/* Calendar Section */}
+        {/* Chart Section - Now taking more space (4 cols) */}
         <Card className="col-span-4">
-          <CardHeader>
-            <CardTitle>Calendario</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div style={{ height: 500 }}>
-              <Calendar
-                localizer={localizer}
-                events={events}
-                startAccessor="start"
-                endAccessor="end"
-                culture='es'
-                messages={{
-                  next: "Sig",
-                  previous: "Ant",
-                  today: "Hoy",
-                  month: "Mes",
-                  week: "Semana",
-                  day: "Día"
-                }}
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Chart Section */}
-        <Card className="col-span-3">
           <CardHeader>
             <CardTitle>Flujo de Caja</CardTitle>
           </CardHeader>
@@ -165,6 +129,38 @@ export default function DashboardPage() {
                   <Bar dataKey="monto" fill="#2563EB" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Upcoming Events - Repurposed as 3 cols */}
+        <Card className="col-span-3">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <CalendarIcon className="h-4 w-4 text-slate-500" />
+              Vencimientos Recientes
+            </CardTitle>
+            <Link href="/calendar" className="text-xs text-blue-600 hover:underline flex items-center">
+              Ver todo <ArrowRight className="h-3 w-3 ml-1" />
+            </Link>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {events.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No hay eventos registrados.</p>
+              ) : (
+                events.slice(0, 5).map((e) => (
+                  <div key={e.id} className="flex items-center justify-between border-b pb-3 last:border-0 last:pb-0">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium leading-none">{e.title}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Vence: {e.end.toLocaleDateString()}
+                      </p>
+                    </div>
+                    {/* Status dot or similar could go here */}
+                  </div>
+                ))
+              )}
             </div>
           </CardContent>
         </Card>

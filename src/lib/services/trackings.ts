@@ -25,10 +25,14 @@ export const TrackingsService = {
         return {
             id: snap.id,
             ...data,
-            tasks: data.tasks || [],
-            materials: data.materials || [],
-            dailyLogs: data.dailyLogs || [],
-            pagos: data.pagos || []
+            tasks: Array.isArray(data.tasks) ? data.tasks : [],
+            materials: Array.isArray(data.materials) ? data.materials : [],
+            dailyLogs: Array.isArray(data.dailyLogs) ? data.dailyLogs : [],
+            pagos: Array.isArray(data.pagos) ? data.pagos : [],
+            extras: Array.isArray(data.extras) ? data.extras : [],
+            purchases: Array.isArray(data.purchases) ? data.purchases : [],
+            paymentPromises: Array.isArray(data.paymentPromises) ? data.paymentPromises : [],
+            checklist: Array.isArray(data.checklist) ? data.checklist : []
         } as Tracking;
     },
 
@@ -46,10 +50,14 @@ export const TrackingsService = {
                 return {
                     id: doc.id,
                     ...data,
-                    tasks: data.tasks || [],
-                    materials: data.materials || [],
-                    dailyLogs: data.dailyLogs || [],
-                    pagos: data.pagos || []
+                    tasks: Array.isArray(data.tasks) ? data.tasks : [],
+                    materials: Array.isArray(data.materials) ? data.materials : [],
+                    dailyLogs: Array.isArray(data.dailyLogs) ? data.dailyLogs : [],
+                    pagos: Array.isArray(data.pagos) ? data.pagos : [],
+                    extras: Array.isArray(data.extras) ? data.extras : [],
+                    purchases: Array.isArray(data.purchases) ? data.purchases : [],
+                    paymentPromises: Array.isArray(data.paymentPromises) ? data.paymentPromises : [],
+                    checklist: Array.isArray(data.checklist) ? data.checklist : []
                 } as Tracking;
             })
             .filter(t => !t.deletedAt);
@@ -58,6 +66,24 @@ export const TrackingsService = {
     update: async (tenantId: string, id: string, data: Partial<Tracking>) => {
         const docRef = getTenantDoc("trackings", id);
         await safeUpdateDoc(docRef, { ...data, updatedAt: Date.now() });
+    },
+
+    updateStatus: async (tenantId: string, id: string, status: Tracking['status']) => {
+        const docRef = getTenantDoc("trackings", id);
+        const updates: any = { status, updatedAt: Date.now() };
+
+        // Updates dates based on status transition
+        if (status === 'in_progress') updates['dates.startedAt'] = Date.now();
+        if (status === 'delivered') updates['dates.deliveredAt'] = Date.now();
+        if (status === 'closed') updates['dates.closedAt'] = Date.now();
+        if (status === 'canceled') updates['dates.canceledAt'] = Date.now();
+
+        await safeUpdateDoc(docRef, updates);
+    },
+
+    updateChecklist: async (tenantId: string, id: string, checklist: any[]) => {
+        const docRef = getTenantDoc("trackings", id);
+        await safeUpdateDoc(docRef, { checklist, updatedAt: Date.now() });
     },
 
     delete: async (tenantId: string, id: string) => {
@@ -81,6 +107,18 @@ export const TrackingsService = {
         const q = query(colRef, where("deletedAt", ">", 0), orderBy("deletedAt", "desc"), limit(50));
         const snap = await getDocs(q);
         return snap.docs.map(d => ({ id: d.id, ...d.data() } as Tracking));
+    },
+
+    deletePermanent: async (tenantId: string, id: string) => {
+        const docRef = getTenantDoc("trackings", id);
+        await deleteDoc(docRef);
+    },
+
+    getDeletedIds: async (tenantId: string) => {
+        const colRef = getTenantCollection("trackings");
+        const q = query(colRef, where("deletedAt", ">", 0), limit(100));
+        const snap = await getDocs(q);
+        return snap.docs.map(d => d.id);
     },
 
     // --- Tasks ---
@@ -127,13 +165,99 @@ export const TrackingsService = {
         });
     },
 
+    // --- Extras ---
+    addExtra: async (tenantId: string, trackingId: string, extra: any, newTotal: number, newSaldo: number) => {
+        const docRef = getTenantDoc("trackings", trackingId);
+        await safeUpdateDoc(docRef, {
+            extras: arrayUnion(extra),
+            total: newTotal,
+            saldoPendiente: newSaldo,
+            updatedAt: Date.now()
+        });
+    },
+
+    updateExtras: async (tenantId: string, trackingId: string, extras: any[], newTotal: number, newSaldo: number) => {
+        const docRef = getTenantDoc("trackings", trackingId);
+        await safeUpdateDoc(docRef, {
+            extras,
+            total: newTotal,
+            saldoPendiente: newSaldo,
+            updatedAt: Date.now()
+        });
+    },
+
+    removeExtra: async (tenantId: string, trackingId: string, extra: any, newTotal: number, newSaldo: number) => {
+        const docRef = getTenantDoc("trackings", trackingId);
+        await safeUpdateDoc(docRef, {
+            extras: arrayRemove(extra),
+            total: newTotal,
+            saldoPendiente: newSaldo,
+            updatedAt: Date.now()
+        });
+    },
+
+    // --- Purchases ---
+    addPurchase: async (tenantId: string, trackingId: string, purchase: any) => {
+        const docRef = getTenantDoc("trackings", trackingId);
+        await safeUpdateDoc(docRef, {
+            purchases: arrayUnion(purchase),
+            updatedAt: Date.now()
+        });
+    },
+
+    removePurchase: async (tenantId: string, trackingId: string, purchase: any) => {
+        const docRef = getTenantDoc("trackings", trackingId);
+        await safeUpdateDoc(docRef, {
+            purchases: arrayRemove(purchase),
+            updatedAt: Date.now()
+        });
+    },
+
+    // --- Promises ---
+    addPromise: async (tenantId: string, trackingId: string, promise: any) => {
+        const docRef = getTenantDoc("trackings", trackingId);
+        await safeUpdateDoc(docRef, {
+            paymentPromises: arrayUnion(promise),
+            updatedAt: Date.now()
+        });
+    },
+
+    updatePromises: async (tenantId: string, trackingId: string, promises: any[]) => {
+        const docRef = getTenantDoc("trackings", trackingId);
+        await safeUpdateDoc(docRef, {
+            paymentPromises: promises,
+            updatedAt: Date.now()
+        });
+    },
+
     // --- Payments ---
-    registerPayment: async (tenantId: string, trackingId: string, payment: Pago, newTotalPaid: number, total: number) => {
+    registerPayment: async (tenantId: string, trackingId: string, payment: Pago, saldoPendiente: number) => {
         const docRef = getTenantDoc("trackings", trackingId);
         await safeUpdateDoc(docRef, {
             pagos: arrayUnion(removeUndefined(payment)),
-            saldoPendiente: total - newTotalPaid,
+            saldoPendiente,
             updatedAt: Date.now()
         });
+    },
+
+    deletePayment: async (tenantId: string, trackingId: string, payment: Pago, saldoPendiente: number) => {
+        const docRef = getTenantDoc("trackings", trackingId);
+        await safeUpdateDoc(docRef, {
+            pagos: arrayRemove(payment),
+            saldoPendiente,
+            updatedAt: Date.now()
+        });
+    },
+
+    hasTrackings: async (tenantId: string, clientId: string): Promise<boolean> => {
+        const colRef = getTenantCollection("trackings");
+        const q = query(colRef, where("clientId", "==", clientId), limit(1));
+        const snap = await getDocs(q);
+        return !snap.empty;
+    },
+
+    updateItemSchedule: async (tenantId: string, trackingId: string, itemSchedule: any) => {
+        const docRef = getTenantDoc("trackings", trackingId);
+        await safeUpdateDoc(docRef, { itemSchedule, updatedAt: Date.now() });
     }
 };
